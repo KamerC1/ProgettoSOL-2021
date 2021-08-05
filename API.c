@@ -31,6 +31,7 @@ File *createFile(const char *pathname, int clientFd);
 int closeFile(const char *pathname, icl_hash_t *hashPtrF, int clientFd);
 void stampaHash(icl_hash_t *hashPtr);
 void freeFileData(void *serverFile);
+int readFile(const char *pathname, char **buf, size_t *size, icl_hash_t *hashPtrF, int clientFd);
 
 
 
@@ -117,6 +118,42 @@ int openFile(const char *pathname, int flags, icl_hash_t *hashPtrF, int clientFd
     }
 
     serverFile->canWriteFile = 1;
+
+    return 0;
+}
+
+int readFile(const char *pathname, char **buf, size_t *size, icl_hash_t *hashPtrF, int clientFd)
+{
+    //in caso di errore, buf = NULL, size = 0
+    *size = 0;
+
+    //Argomenti invalidi
+    //non c'è bisogno di controllare: !strlen(pathname) perché lo si fa dopo con icl_hash_find [eliminare]
+    COND_SETERR(pathname == NULL || *buf != NULL || hashPtrF == NULL || clientFd < 0,
+                "ERRORE: pathname == NULL || hashPtrF == NULL || clientFd < 0", EINVAL)
+
+    File *serverFile = icl_hash_find(hashPtrF, (void *) pathname);
+    //il file non è presente nella hash table o non è stato aperto da clientFd
+    COND_SETERR(serverFile == NULL || findSortedList(serverFile->fdOpen_SLPtr, clientFd) == -1,
+                "il file non è presente nella hash table o non è stato aperto da clientFd", EPERM);
+
+
+
+    *size = serverFile->sizeFileByte;
+    COND_SETERR((*buf = malloc(*size)) == NULL, "readFile: *buf = malloc(*size)", EPERM)
+    memset(*buf, '\0', *size);
+
+    if(strncpy(*buf, serverFile->fileContent, serverFile->sizeFileByte) == NULL)
+    {
+        //in caso di errore, libero la memoria
+        puts("strncpy(*buf, serverFile->fileContent, serverFile->sizeFileByte) = NULL");
+        free(*buf);
+        errno = EPERM;
+        return -1;
+    }
+
+    //readFile terminata con successo ==> non posso più fare la writeFile
+    serverFile->canWriteFile = 0;
 
     return 0;
 }
