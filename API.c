@@ -36,6 +36,9 @@ int readFile(const char *pathname, char **buf, size_t *size, icl_hash_t *hashPtr
 int readNFiles(int N, const char *dirname, icl_hash_t *hashPtrF);
 void createReadNFiles(int N, icl_hash_t *hashPtrF);
 
+int appendToFile(const char *pathname, char *buf, size_t size, const char *dirname, icl_hash_t *hashPtrF, int clientFd);
+int closeFile(const char *pathname, icl_hash_t *hashPtrF, int clientFd);
+
 
 
 int main(int argc, char *argv[]) {
@@ -300,6 +303,50 @@ void fillStructFile(File *serverFileF) {
     }
 
     SYSCALL_NOTZERO(fclose(diskFile), "fclose(diskFile)")
+}
+
+int closeFile(const char *pathname, icl_hash_t *hashPtrF, int clientFd) {
+    //la correttezza di pathname viene controllata dopo [eliminare]
+    COND_SETERR(pathname == NULL || hashPtrF == NULL || clientFd < 0,
+                "ERRORE close: pathname == NULL || hashPtrF == NULL || clientFd < 0", EPERM)
+    //file non presente nel server
+    File *serverFile = icl_hash_find(hashPtrF, (void *) pathname);
+    COND_SETERR(serverFile == NULL, "ERRORE close: file non presente nel server", EPERM)
+    //il client non ha aperto il file
+    COND_SETERR(findSortedList(serverFile->fdOpen_SLPtr, clientFd) == -1, "CLOSE: client non ha aperto il file", EPERM)
+
+
+    //Client "chiude" il file aperto
+    COND_SETERR(deleteSortedList(&(serverFile->fdOpen_SLPtr), clientFd) == -1,
+                "CLOSE: deleteSortedList(&(serverFile->fdOpen_SLPtr), clientFd)", EPERM)
+    serverFile->canWriteFile = 0;
+
+    return 0;
+}
+
+int appendToFile(const char *pathname, char *buf, size_t size, const char *dirname, icl_hash_t *hashPtrF, int clientFd) {
+    //Argomenti invalidi
+    //"size": numero di byte di buf e non il numero di caratteri
+    COND_SETERR(pathname == NULL || buf == NULL || strlen(buf) + 1 != size,
+                "appendToFile: pathname == NULL || buf == NULL || strlen(buf)+1 != size", EINVAL);
+    COND_SETERR(hashPtrF == NULL || clientFd < 0, "appendToFile: hashPtrF == NULL || clientFd < 0", EINVAL);
+
+    File *serverFile = icl_hash_find(hashPtrF, (void *) pathname);
+    //il file non è presente nella hash table o non è stato aperto da clientFd
+    COND_SETERR(serverFile == NULL || findSortedList(serverFile->fdOpen_SLPtr, clientFd) == -1,
+                "il file non è presente nella hash table o non è stato aperto da clientFd", EPERM)
+
+
+    REALLOC(serverFile->fileContent, sizeof(char) * (serverFile->sizeFileByte + size -
+                                                     1)) //il +1 è già contato in "serverFile->sizeFileByte" e in size (per questo motivo vien fatto -1)
+    strncat(serverFile->fileContent, buf,
+            size - 1); //sovvrascrive in automatico il '\0' di serverFile->fileContent e ne aggiunge uno alla fine
+    //Aggiorno serverFile->sizeFileByte
+    serverFile->sizeFileByte = serverFile->sizeFileByte + size - 1;
+
+    serverFile->canWriteFile = 0;
+
+    return 0;
 }
 
 //elimina tutti i dati compresi in serverFile (ed elimina lo stesso serverFile)
