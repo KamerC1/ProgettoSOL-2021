@@ -33,6 +33,8 @@ void stampaHash(icl_hash_t *hashPtr);
 void freeFileData(void *serverFile);
 int readFile(const char *pathname, char **buf, size_t *size, icl_hash_t *hashPtrF, int clientFd);
 
+int readNFiles(int N, const char *dirname, icl_hash_t *hashPtrF);
+void createReadNFiles(int N, icl_hash_t *hashPtrF);
 
 
 
@@ -156,6 +158,62 @@ int readFile(const char *pathname, char **buf, size_t *size, icl_hash_t *hashPtr
     serverFile->canWriteFile = 0;
 
     return 0;
+}
+
+int readNFiles(int N, const char *dirname, icl_hash_t *hashPtrF)
+{
+    COND_SETERR(hashPtrF == NULL,"ERRORE: pathname == NULL || hashPtrF == NULL || clientFd < 0", EINVAL);
+    COND_SETERR(dirname == NULL, "readNFiles: dirname == NULL", EINVAL)
+
+    //imposta il numero di file da leggere
+    if(N <= 0 || hashPtrF->nentries < N)
+        N = hashPtrF->nentries;
+
+    //==Calcola il path dove lavora il processo==
+    //calcolo la lunghezza del path [eliminare]
+    char *temp = NULL;
+    int pathLength = strlen(temp = getcwd(NULL, MAX_PATH_LENGTH)); //il +1 è già compreso in MAX_PATH_LENGTH
+    free(temp);
+    //cambio path [eliminare]
+    char processPath[pathLength+1]; //+1 per '\0'
+    getcwd(processPath, pathLength+1); //+1 per '\0'
+
+    DIR * directory;
+    RETURN_NULL_SYSCALL(directory, opendir(dirname), "Errore: opendir")
+    chdir(dirname);
+
+    createReadNFiles(N, hashPtrF);
+
+    chdir(processPath); //ritorno alla directory originaria
+    closedir(directory);
+
+    return 0;
+}
+
+//funzione di supporto a readNFiles. Crea i file letti dal server e ne copia il contenuto
+void createReadNFiles(int N, icl_hash_t *hashPtrF)
+{
+    int NfileCreated = 0;
+
+    int k;
+    icl_entry_t *entry;
+    char *key;
+    File *serverFile;
+    icl_hash_foreach(hashPtrF, k, entry, key, serverFile)
+    {
+        if(NfileCreated >= N)
+        {
+            return;
+        }
+        NfileCreated++;
+
+        FILE *diskFile;
+        //il file, anche se esiste già, viene sovrascritto perché il file nel server potrebbe essere cambiato
+        RETURN_NULL_SYSCALL(diskFile, fopen(basename(serverFile->path), "w"), "Errore: fopen(basename(serverFile->path)")
+        fputs(serverFile->fileContent, diskFile);
+
+        SYSCALL_NOTZERO(fclose(diskFile), "fclose(diskFile)")
+    }
 }
 
 //alloca e inizializzata una struttura File
