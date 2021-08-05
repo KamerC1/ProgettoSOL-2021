@@ -4,7 +4,7 @@
 #include <sys/unistd.h>
 
 #include "../include/serverAPI.h"
-#include "../uitls/util.h"
+#include "../utils/util.h"
 
 #define MAX_PATH_LENGTH 4097 //aggiunto il +1 per contenere '\0'
 #define MAX_FILE_LENGTH 256 //aggiunto il +1 per contenere '\0'
