@@ -83,7 +83,7 @@ int openFile(const char *pathname, int flags, icl_hash_t *hashPtrF, int clientFd
                         EPERM)
 
 
-            CS(insertSortedList(&(serverFile->fdOpen_SLPtr), clientFd) == -1, "O_OPEN: File non creato", EPERM)
+            insertSortedList(&(serverFile->fdOpen_SLPtr), clientFd);
 
             break;
 
@@ -140,22 +140,20 @@ static File *createFile(const char *pathname, int clientFd)
 
 
 
-    File *serverFile = malloc(sizeof(File));
-    CSN(serverFile == NULL, "createFile: serverFile = malloc(sizeof(File))", errno)
+    File *serverFile;
+    RETURN_NULL_SYSCALL(serverFile, malloc(sizeof(File)), "createFile: serverFile = malloc(sizeof(File))")
 
     //--inserimento pathname--
     int strlenPath = strlen(pathname);
-    serverFile->path = malloc(sizeof(char) * strlenPath + 1);
-    CSAN(serverFile->path == NULL, "serverFile->path = malloc()", errno, free(serverFile))
-    CSAN(strncpy(serverFile->path, pathname, strlenPath + 1) == NULL, "createFile: strncpy", errno, free(serverFile); free(serverFile->path))
-
+    RETURN_NULL_SYSCALL(serverFile->path, malloc(sizeof(char) * strlenPath + 1), "createFile: malloc(sizeof(char) * strlenPath + 1)")
+    strncpy(serverFile->path, pathname, strlenPath + 1);
 
     serverFile->fileContent = NULL;
     serverFile->sizeFileByte = 0;
     serverFile->canWriteFile = 0; //viene impostato a 1 alla fine della openFile
 
     serverFile->fdOpen_SLPtr = NULL;
-    CSN(insertSortedList(&(serverFile->fdOpen_SLPtr), clientFd) == -1, "createFile: insertSortedList", errno) //fallisce per via della malloc
+    insertSortedList(&(serverFile->fdOpen_SLPtr), clientFd);
 
     return serverFile;
 }
@@ -180,10 +178,10 @@ int readFile(const char *pathname, char **buf, size_t *size, icl_hash_t *hashPtr
 
 
     *size = serverFile->sizeFileByte;
-    CS((*buf = malloc(*size)) == NULL, "readFile: *buf = malloc(*size)", EPERM)
+    RETURN_NULL_SYSCALL(*buf, malloc(*size), "readFile: *buf = malloc(*size)")
     memset(*buf, '\0', *size);
 
-    CSA(strncpy(*buf, serverFile->fileContent, serverFile->sizeFileByte) == NULL, "readFile: strncpy", errno, free(*buf);)
+    strncpy(*buf, serverFile->fileContent, serverFile->sizeFileByte);
 
     //readFile terminata con successo ==> non posso più fare la writeFile
     serverFile->canWriteFile = 0;
@@ -310,8 +308,7 @@ int fillStructFile(File *serverFileF)
 
 
     //-Inserimento fileContent-
-    serverFileF->fileContent = malloc(sizeof(char) * numCharFile + 1);
-    CS(serverFileF->fileContent == NULL, "fillStructFile: malloc()", errno)
+    RETURN_NULL_SYSCALL(serverFileF->fileContent, malloc(sizeof(char) * numCharFile + 1), "fillStructFile: malloc()")
     memset(serverFileF->fileContent, '\0', numCharFile + 1);
     size_t readLength = fread(serverFileF->fileContent, 1, numCharFile,diskFile); //size: 1 perché si legge 1 byte alla volta [eliminare]
     //Controllo errore fread
@@ -400,7 +397,7 @@ int checkPathname(const char *pathname)
     //basename può modificare pathname
     int lengthPath = strlen(pathname);
     char pathnameCopy[lengthPath+1];
-    CS(strncpy(pathnameCopy, pathname, lengthPath+1) == NULL, "checkPathname: strncpy()", errno)
+    strncpy(pathnameCopy, pathname, lengthPath+1);
 
     if(pathname == NULL || strlen(pathname) >= MAX_PATH_LENGTH-1 || strlen(pathname) <= 0 || basename(pathnameCopy) == NULL || strlen(pathnameCopy) >= MAX_FILE_LENGTH-1)
         return -1;
