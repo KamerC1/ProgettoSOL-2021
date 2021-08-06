@@ -2,7 +2,7 @@
 #include<stdlib.h>
 #include "sortedList.h"
 
-int insertSortedList(NodoPtr *lPtr, int valore)
+void insertSortedList(NodoPtr *lPtr, int valore)
 {
     if(*lPtr == NULL)
     {
@@ -12,13 +12,11 @@ int insertSortedList(NodoPtr *lPtr, int valore)
             nuovoNodo->dato = valore;
             nuovoNodo->prossimoPtr = NULL;
             *lPtr = nuovoNodo;
-
-            return 0;
         }
         else
         {
-            perror("Lista: errore");
-            return -1;
+            perror("Lista: Memoria esaurita");
+            exit(EXIT_FAILURE);
         }
     }
     else if((*lPtr)->dato > valore)
@@ -29,13 +27,11 @@ int insertSortedList(NodoPtr *lPtr, int valore)
             nuovoNodo->dato = valore;
             nuovoNodo->prossimoPtr = *lPtr;
             *lPtr = nuovoNodo;
-
-            return 0;
         }
         else
         {
-            perror("Lista: errore");
-            return -1;
+            perror("Lista: Memoria esaurita");
+            exit(EXIT_FAILURE);
         }
     }
     else
