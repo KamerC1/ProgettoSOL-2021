@@ -1,84 +1,46 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <pthread.h>
-#include <errno.h>
+#ifndef serverAPI_h
+#define serverAPI_h
 
-#define READ_END 0
-#define WRITE_END 1
+#include <stdbool.h>
+#include "../strutture_dati/sortedList/sortedList.c"
+#include "../strutture_dati/hash/icl_hash.c"
 
-#define RETURN_SYSCALL(r,c,e) if((r=c)==-1) { perror(e);exit(errno); }
-#define SYSCALL(c,e) if(c==-1) { perror(e);exit(errno);}
-//usare con le funzioni che ritornano NULL quando falliscono e di cui si vuole memorizzare il valore di ritorno (es: fopen)
-#define RETURN_NULL_SYSCALL(retrunVar, fun, text) if((retrunVar=fun) == NULL) { perror(text);exit(errno); }
-//usare per le syscall che quando falliscono ritornano un valore != 0
-#define SYSCALL_NOTZERO(syscall, text) if(syscall != 0) {perror(text);exit(errno);}
-#define THREAD_CREATE(a, b, c, d, text) if(pthread_create(a, b, c, d) != 0) { perror(text);exit(EXIT_FAILURE);}
-#define THREAD_JOIN(a, b, text) if(pthread_join(a, b) != 0) { perror(text);exit(EXIT_FAILURE);}
+struct file {
+    char *path;
+    char *fileContent;
+    size_t sizeFileByte; //tiene conto anche del '\0'
+    bool canWriteFile; //1: se si può fare la WriteFile(), 0 altrimenti
 
+    //lista che memorizza l'fd dei client che hanno chiamato la open
+    NodoSL *fdOpen_SLPtr;
 
-#define PRINT(text) if(STAMPA_ERRORE) {puts(text);}
-
-#define CS(cond, text, err) if(cond) {PRINT(text);errno=err; return -1;} //CS = COND_SETERR
-//uguale a "COND_SETERR" ma ritorna NULL
-#define CSN(cond, text, err) if(cond) {PRINT(text);errno=err; return NULL;} //CS = COND_SETERR_NULL
-
-//esegue delle istruzioni "act" in caso di errore
-#define CSA(cond, text, err, act) if(cond) {PRINT(text); act; errno=err; return -1;} //CSA = COND_SETERR_ACT
-#define CSAN(cond, text, err, act) if(cond) {PRINT(text); act; errno=err; return NULL;} //CSA = COND_SETERR_ACT_NULL
-
-#define FCLOSE(file) if(fclose(file)==EOF) {exit(errno);}
-#define CLOSEDIR(dir) if(closedir(dir)==EOF) {exit(errno);}
+};
+typedef struct file File;
 
 
+//numero di file che il server può contenere attraverso la tabella hash (dato da prendere da config.txt) [eliminare]
+#define NUMFILE 10
+#define O_CREATE 1
+#define O_LOCK 10
+#define O_OPEN 100 //da usare se si vuole aprire il file senza crearlo o usare la lock
+
+#define MAX_PATH_LENGTH 4097 //aggiunto il +1 per contenere '\0'
+#define MAX_FILE_LENGTH 256 //aggiunto il +1 per contenere '\0'
 
 
+//Funzioni che implementano le API
+int writeFileServer(const char *pathname, const char *dirname, icl_hash_t *hashPtrF, int clientFd);
+int openFileServer(const char *pathname, int flags, icl_hash_t *hashPtrF, int clientFd);
+int closeFileServer(const char *pathname, icl_hash_t *hashPtrF, int clientFd);
+int appendToFileServer(const char *pathname, char *buf, size_t size, const char *dirname, icl_hash_t *hashPtrF, int clientFd);
+int readFileServer(const char *pathname, char **buf, size_t *size, icl_hash_t *hashPtrF, int clientFd);
+int readNFilesServer(int N, const char *dirname, icl_hash_t *hashPtrF);
 
+int fillStructFile(File *serverFileF);
+static File *createFile(const char *pathname, int clientFd);
+void stampaHash(icl_hash_t *hashPtr);
+void freeFileData(void *serverFile);
+int createReadNFiles(int N, icl_hash_t *hashPtrF);
+int checkPathname(const char *pathname);
 
-
-
-#define LOCK(l)                                         \
-if (pthread_mutex_lock(l) != 0)                         \
-{	                                                    \
-    fprintf(stderr, "ERRORE FATALE lock\n");			\
-    pthread_exit((void*)EXIT_FAILURE);                  \
-}
-
-#define UNLOCK(l)                                       \
-if (pthread_mutex_unlock(l) != 0)                       \
-{	                                                    \
-    fprintf(stderr, "ERRORE FATALE unlock\n");			\
-    pthread_exit((void*)EXIT_FAILURE);                  \
-}
-
-#define SIGNAL(c)                                       \
-if (pthread_cond_signal(c) != 0)                        \
-{	                                                    \
-    fprintf(stderr, "ERRORE FATALE signal\n");			\
-    pthread_exit((void*)EXIT_FAILURE);                  \
-}
-
-#define WAIT(c, l)                                      \
-if (pthread_cond_wait(c,l) != 0)                        \
-{	                                                    \
-    fprintf(stderr, "ERRORE FATALE wait\n");			\
-    pthread_exit((void*)EXIT_FAILURE);                  \
-}
-
-#define SCANF_STRINGA(stringa)                \
-if(scanf("%s", stringa) == 0)                 \
-{                                             \
-    perror("Impossibile leggere la stringa"); \
-    exit(EXIT_FAILURE);                       \
-}
-
-#define REALLOC(ptr, size) \
-char *ptr1 = realloc(ptr, size); \
-if (ptr1 == NULL)          \
-{                          \
-    puts("REALLOC error"); \
-    free(ptr);             \
-    exit(EXIT_FAILURE);    \
-}                          \
-else                       \
-    ptr = ptr1;             \
-
+#endif
