@@ -176,26 +176,30 @@ int createReadNFiles(int N, icl_hash_t *hashPtrF)
     char *key;
     File *serverFile;
     icl_hash_foreach(hashPtrF, k, entry, key, serverFile)
-    {
-        if(NfileCreated >= N)
         {
-            return 0;
-        }
-        NfileCreated++;
+            if(NfileCreated >= N)
+            {
+                return 0;
+            }
+            NfileCreated++;
 
-        //il file, anche se esiste già, viene sovrascritto perché il file nel server potrebbe essere cambiato
-        FILE *diskFile = fopen(basename(serverFile->path), "w");
-        CS(diskFile == NULL, "createReadNFiles: fopen()", errno)
-        if(fputs(serverFile->fileContent, diskFile) == EOF)
-        {
-            puts("createReadNFiles: fputs");
+            //il file, anche se esiste già, viene sovrascritto perché il file nel server potrebbe essere cambiato
+            FILE *diskFile = fopen(basename(serverFile->path), "w");
+            CS(diskFile == NULL, "createReadNFiles: fopen()", errno)
+
+            if(serverFile->fileContent != NULL)
+            {
+                if(fputs(serverFile->fileContent, diskFile) == EOF)
+                {
+                    puts("createReadNFiles: fputs");
+                    SYSCALL_NOTZERO(fclose(diskFile), "createReadNFiles: fclose() - termino processo")
+                }
+            }
+
             SYSCALL_NOTZERO(fclose(diskFile), "createReadNFiles: fclose() - termino processo")
+
+            serverFile->canWriteFile = 0;
         }
-
-        SYSCALL_NOTZERO(fclose(diskFile), "createReadNFiles: fclose() - termino processo")
-
-        serverFile->canWriteFile = 0;
-    }
 
     return 0;
 }
