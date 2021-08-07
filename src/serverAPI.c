@@ -6,66 +6,9 @@
 #include "../include/serverAPI.h"
 #include "../utils/util.h"
 
-#define MAX_PATH_LENGTH 4097 //aggiunto il +1 per contenere '\0'
-#define MAX_FILE_LENGTH 256 //aggiunto il +1 per contenere '\0'
-
-
-//numero di file che il server può contenere attraverso la tabella hash (dato da prendere da config.txt) [eliminare]
-#define NUMFILE 10
-#define O_CREATE 1
-#define O_LOCK 10
-#define O_OPEN 100 //da usare se si vuole aprire il file senza crearlo o usare la lock
-
-#define STAMPA_ERRORE 1 //1 stampa gli errori, 0 No
-
-int fillStructFile(File *serverFileF);
-static File *createFile(const char *pathname, int clientFd);
-void stampaHash(icl_hash_t *hashPtr);
-void freeFileData(void *serverFile);
-int createReadNFiles(int N, icl_hash_t *hashPtrF);
-int checkPathname(const char *pathname);
-
-
-
-int main(int argc, char *argv[]) {
-    if (argc < 2) {
-        puts("Inserire il pathname");
-        exit(EXIT_FAILURE);
-    }
-
-    icl_hash_t *hashPtr = icl_hash_create(NUMFILE, NULL, NULL);
-
-
-
-    SYSCALL(openFile(argv[1], O_CREATE, hashPtr, 1), "ERRORE: ")
-    SYSCALL(openFile(argv[1], O_OPEN, hashPtr, 2), "ERRORE: ")
-
-    SYSCALL(writeFile(argv[1], NULL, hashPtr, 1), "ERRORE: ")
-    SYSCALL(appendToFile(argv[1], "CANE", 5, NULL, hashPtr, 1), "ERRORE: ")
-    SYSCALL(appendToFile(argv[1], "CANE", 5, NULL, hashPtr, 1), "ERRORE: ")
-
-    char *buf = NULL;
-    size_t dim = 0;
-
-    SYSCALL(readFile(argv[1], &buf, &dim, hashPtr, 1), "ERRORE: ")
-    printf("BUFFER: %s\n", buf);
-    printf("SIZE: %ld\n", dim);
-
-    readNFiles(1, "gatto", hashPtr);
-    SYSCALL(appendToFile(argv[1], "gatto", 6, NULL, hashPtr, 1), "ERRORE: ")
-    readNFiles(1, "gatto", hashPtr);
-
-
-    stampaHash(hashPtr);
-
-    icl_hash_destroy(hashPtr, NULL, freeFileData);
-    free(buf);
-
-    return 0;
-}
 
 //da finire [controllare]
-int openFile(const char *pathname, int flags, icl_hash_t *hashPtrF, int clientFd)
+int openFileServer(const char *pathname, int flags, icl_hash_t *hashPtrF, int clientFd)
 {
     //argomenti invalidi
     CS(checkPathname(pathname), "openFile: pathname sbaglito", EINVAL)
@@ -159,7 +102,7 @@ static File *createFile(const char *pathname, int clientFd)
 }
 
 
-int readFile(const char *pathname, char **buf, size_t *size, icl_hash_t *hashPtrF, int clientFd)
+int readFileServer(const char *pathname, char **buf, size_t *size, icl_hash_t *hashPtrF, int clientFd)
 {
     //in caso di errore, buf = NULL, size = 0
     *size = 0;
@@ -189,7 +132,7 @@ int readFile(const char *pathname, char **buf, size_t *size, icl_hash_t *hashPtr
     return 0;
 }
 
-int readNFiles(int N, const char *dirname, icl_hash_t *hashPtrF)
+int readNFilesServer(int N, const char *dirname, icl_hash_t *hashPtrF)
 {
     CS(hashPtrF == NULL,"ERRORE: pathname == NULL || hashPtrF == NULL || clientFd < 0", EINVAL)
     CS(dirname == NULL, "readNFiles: dirname == NULL", EINVAL)
@@ -259,7 +202,7 @@ int createReadNFiles(int N, icl_hash_t *hashPtrF)
 
 
 //manca buona parte della funzione - [controllare]
-int writeFile(const char *pathname, const char *dirname, icl_hash_t *hashPtrF, int clientFd)
+int writeFileServer(const char *pathname, const char *dirname, icl_hash_t *hashPtrF, int clientFd)
 {
     //Argomenti invalidi
     CS(checkPathname(pathname), "openFile: pathname sbaglito", EINVAL)
@@ -318,7 +261,7 @@ int fillStructFile(File *serverFileF)
     return 0;
 }
 
-int closeFile(const char *pathname, icl_hash_t *hashPtrF, int clientFd)
+int closeFileServer(const char *pathname, icl_hash_t *hashPtrF, int clientFd)
 {
     CS(checkPathname(pathname), "openFile: pathname sbaglito", EINVAL)
     CS(hashPtrF == NULL || clientFd < 0, "ERRORE close: pathname == NULL || hashPtrF == NULL || clientFd < 0", EINVAL)
@@ -337,7 +280,7 @@ int closeFile(const char *pathname, icl_hash_t *hashPtrF, int clientFd)
     return 0;
 }
 
-int appendToFile(const char *pathname, char *buf, size_t size, const char *dirname, icl_hash_t *hashPtrF, int clientFd)
+int appendToFileServer(const char *pathname, char *buf, size_t size, const char *dirname, icl_hash_t *hashPtrF, int clientFd)
 {
     //Argomenti invalidi
     CS(checkPathname(pathname), "openFile: pathname sbaglito", EINVAL)
