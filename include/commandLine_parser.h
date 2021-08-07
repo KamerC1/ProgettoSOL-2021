@@ -3,20 +3,20 @@
 
 #endif
 
-struct nodo
+struct nodoCLP
 {
     char option;
     char *argument;
-    struct nodo *prossimoPtr;
+    struct nodoCLP *prossimoPtr;
 };
-typedef struct nodo Nodo;
-typedef Nodo *NodoPtr;
+typedef struct nodoCLP NodoCLP;
+typedef NodoCLP *NodoCLPtr;
 
-void pushCoda(NodoPtr *testaPtrF, NodoPtr *codaPtrF, char optionF, char argumentF[]);
-int popCoda(NodoPtr *lPtrF, char *optionF, char **argumentF);
-int findOption(NodoPtr lPtr, char opt);
-int equalTolastOpt(NodoPtr codaPtr, char opt);
-void cmlParsing(NodoPtr *testaPtr, NodoPtr *codaPtr, int argc, char *argv[]);
-int topCoda(NodoPtr lPtrF, char *optionF, char **argumentF);
-void stampaCoda(NodoPtr lPtrF);
-void freeLista(NodoPtr *lPtrF, NodoPtr *codaPtr);
+void pushCoda(NodoCLPtr *testaPtrF, NodoCLPtr *codaPtrF, char optionF, char argumentF[]);
+int popCoda(NodoCLPtr *lPtrF, char *optionF, char **argumentF);
+int findOption(NodoCLPtr lPtr, char opt);
+int equalTolastOpt(NodoCLPtr codaPtr, char opt);
+void cmlParsing(NodoCLPtr *testaPtr, NodoCLPtr *codaPtr, int argc, char *argv[]);
+int topCoda(NodoCLPtr lPtrF, char *optionF, char **argumentF);
+void stampaCoda(NodoCLPtr lPtrF);
+void freeLista(NodoCLPtr *lPtrF, NodoCLPtr *codaPtr);
