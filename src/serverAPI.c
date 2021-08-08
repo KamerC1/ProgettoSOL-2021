@@ -1,11 +1,10 @@
 #include <stdio.h>
-#include <libgen.h>
 #include <dirent.h>
 #include <sys/unistd.h>
 
 #include "../include/serverAPI.h"
 #include "../utils/util.h"
-
+#include "../utils/utilsPathname.c"
 
 //da finire [controllare]
 int openFileServer(const char *pathname, int flags, icl_hash_t *hashPtrF, int clientFd)
@@ -23,7 +22,7 @@ int openFileServer(const char *pathname, int flags, icl_hash_t *hashPtrF, int cl
             CS(serverFile == NULL, "O_OPEN: File non presente", EPERM)
             //clientFd ha già aperto la lista
             CS(findSortedList(serverFile->fdOpen_SLPtr, clientFd) == 0, "O_OPEN: file già aperto dal client",
-                        EPERM)
+               EPERM)
 
 
             insertSortedList(&(serverFile->fdOpen_SLPtr), clientFd);
@@ -37,14 +36,18 @@ int openFileServer(const char *pathname, int flags, icl_hash_t *hashPtrF, int cl
 
             serverFile = createFile(pathname, clientFd);
             CS(serverFile == NULL, "O_CREATE: impossibile creare la entry nella hash", EPERM)
+            printf("pathname prima di insert: %s\n", pathname);
+
+
             CS(icl_hash_insert(hashPtrF, (void *) pathname, (void *) serverFile) == NULL,
-                        "O_CREATE: impossibile inserire File nella hash", EPERM)
+               "O_CREATE: impossibile inserire File nella hash", EPERM)
 
             break;
 
         case O_LOCK:
-            CS(icl_hash_find(hashPtrF, (void *) pathname) == NULL,
-                        "O_LOCK: File non presente nella tabella hash", EPERM)
+            serverFile = icl_hash_find(hashPtrF, (void *) pathname);
+            CS(serverFile == NULL,
+               "O_LOCK: File non presente nella tabella hash", EPERM)
 
 
             //GESTIONE LOCK [controllare]
@@ -52,13 +55,13 @@ int openFileServer(const char *pathname, int flags, icl_hash_t *hashPtrF, int cl
 
         case (O_CREATE + O_LOCK):
             //il file è già presente nella hash table
-            CS(icl_hash_find(hashPtrF, (void *) pathname) != NULL, "O_CREATE+O_LOCK: File non creato", EPERM)
+            CS(icl_hash_find(hashPtrF, (void *) pathname) != NULL, "O_CREATE+O_LOCK: File già presente nella hash table", EPERM)
 
 
             serverFile = createFile(pathname, clientFd);
             CS(serverFile == NULL, "O_CREATE + O_LOCK: impossibile creare la entry nella hash", EPERM)
             CS(icl_hash_insert(hashPtrF, (void *) pathname, (void *) serverFile) == NULL,
-                        "O_CREATE + O_LOCK: impossibile inserire File nella hash", EPERM)
+               "O_CREATE + O_LOCK: impossibile inserire File nella hash", EPERM)
             //GESTIONE LOCK [controllare]
             break;
 
@@ -75,6 +78,7 @@ int openFileServer(const char *pathname, int flags, icl_hash_t *hashPtrF, int cl
 
     return 0;
 }
+
 //Funzione di supporto a openFIle: alloca e inizializzata una struttura File
 static File *createFile(const char *pathname, int clientFd)
 {
@@ -111,12 +115,10 @@ int readFileServer(const char *pathname, char **buf, size_t *size, icl_hash_t *h
     CS(checkPathname(pathname), "openFile: pathname sbaglito", EINVAL)
     CS(hashPtrF == NULL || clientFd < 0,"openFile: hashPtrF == NULL || clientFd < 0", EINVAL)
 
-
-
     File *serverFile = icl_hash_find(hashPtrF, (void *) pathname);
     //il file non è presente nella hash table o non è stato aperto da clientFd
     CS(serverFile == NULL || findSortedList(serverFile->fdOpen_SLPtr, clientFd) == -1,
-                "il file non è presente nella hash table o non è stato aperto da clientFd", EPERM)
+       "il file non è presente nella hash table o non è stato aperto da clientFd", EPERM)
 
 
 
@@ -158,7 +160,6 @@ int readNFilesServer(int N, const char *dirname, icl_hash_t *hashPtrF)
     CSA(createReadNFiles(N, hashPtrF) == -1, "readNFiles: createReadNFiles", errno, CLOSEDIR(directory))
     CSA(chdir(processPath) == -1, "readNFiles: chdir(processPath)", errno, CLOSEDIR(directory))
 
-
     CLOSEDIR(directory)
 
     //canWrite viene aggiornato in createReadNFiles
@@ -187,6 +188,7 @@ int createReadNFiles(int N, icl_hash_t *hashPtrF)
             FILE *diskFile = fopen(basename(serverFile->path), "w");
             CS(diskFile == NULL, "createReadNFiles: fopen()", errno)
 
+            //serverFile->fileContent è vuoto, allora il file creato riamen vuoto.
             if(serverFile->fileContent != NULL)
             {
                 if(fputs(serverFile->fileContent, diskFile) == EOF)
@@ -204,7 +206,6 @@ int createReadNFiles(int N, icl_hash_t *hashPtrF)
     return 0;
 }
 
-
 //manca buona parte della funzione - [controllare]
 int writeFileServer(const char *pathname, const char *dirname, icl_hash_t *hashPtrF, int clientFd)
 {
@@ -212,18 +213,18 @@ int writeFileServer(const char *pathname, const char *dirname, icl_hash_t *hashP
     CS(checkPathname(pathname), "openFile: pathname sbaglito", EINVAL)
 
     CS(hashPtrF == NULL || clientFd < 0,
-                "ERRORE: pathname == NULL || hashPtrF == NULL || clientFd < 0", EINVAL)
+       "ERRORE: pathname == NULL || hashPtrF == NULL || clientFd < 0", EINVAL);
 
     File *serverFile = icl_hash_find(hashPtrF, (void *) pathname);
     //il file non è presente nella hash table o non è stato aperto da clientFd
     CS(serverFile == NULL || findSortedList(serverFile->fdOpen_SLPtr, clientFd) == -1,
-                "il file non è presente nella hash table o non è stato aperto da clientFd", EPERM)
+       "writeFileServer: il file non è presente nella hash table o non è stato aperto da clientFd", EPERM)
     //l'ultima operazione non era una open || il file non è vuoto
     CS(serverFile->canWriteFile == 0 || serverFile->sizeFileByte != 0,
-                "l'ultima operazione non era una open || il file non è vuoto", EPERM)
+       "l'ultima operazione non era una open || il file non è vuoto", EPERM)
 
 
-            //ripristino "sizeFileByte" in caso di errore perché fillStructFile() non lo fa.
+    //ripristino "sizeFileByte" in caso di errore perché fillStructFile() non lo fa.
     CSA(fillStructFile(serverFile) == -1, "", errno, serverFile->sizeFileByte = 0)
 
     serverFile->canWriteFile = 0;
@@ -278,7 +279,7 @@ int closeFileServer(const char *pathname, icl_hash_t *hashPtrF, int clientFd)
 
     //Client "chiude" il file aperto
     CS(deleteSortedList(&(serverFile->fdOpen_SLPtr), clientFd) == -1,
-                "CLOSE: deleteSortedList(&(serverFile->fdOpen_SLPtr), clientFd)", EPERM)
+       "CLOSE: deleteSortedList(&(serverFile->fdOpen_SLPtr), clientFd)", EPERM)
     serverFile->canWriteFile = 0;
 
     return 0;
@@ -319,7 +320,6 @@ void freeFileData(void *serverFile) {
     free(serverFileF);
 }
 
-
 void stampaHash(icl_hash_t *hashPtr) {
     //k viene inizializzato a 0 in icl_hash_foreach
     int k;
@@ -327,30 +327,15 @@ void stampaHash(icl_hash_t *hashPtr) {
     char *key;
     File *newFile;
     icl_hash_foreach(hashPtr, k, entry, key, newFile)
-    {
-        printf("-----------------------------------------------\n");
-        printf("Path: %s\n", newFile->path);
-        printf("FIle name: %s\n", basename(newFile->path));
-        printf("\nfileContent:\n%s\n\n", newFile->fileContent);
-        printf("sizeFileByte: %ld\n", newFile->sizeFileByte);
-        stampaSortedList(newFile->fdOpen_SLPtr);
-        printf("-----------------------------------------------\n");
-    }
-}
-
-//Controlla se pathname è corretto
-int checkPathname(const char *pathname)
-{
-    if(pathname == NULL)
-        return -1;
-
-    //basename può modificare pathname
-    int lengthPath = strlen(pathname);
-    char pathnameCopy[lengthPath+1];
-    strncpy(pathnameCopy, pathname, lengthPath+1);
-
-    if(basename(pathnameCopy) == NULL || strlen(pathnameCopy) > MAX_FILE_LENGTH-1)
-        return -1;
-    
-    return 0;
+        {
+            printf("---------------------stampaHash---------------------\n");
+            printf("Chiave: %s\n", key);
+            printf("Path: %s\n", newFile->path);
+//            printf("%d: cmp tra %s-%s\n", strcmp(key, newFile->path), key, newFile->path);
+            printf("FIle name: %s\n", basename(newFile->path));
+            printf("\nfileContent:\n%s\n\n", newFile->fileContent);
+            printf("sizeFileByte: %ld\n", newFile->sizeFileByte);
+            stampaSortedList(newFile->fdOpen_SLPtr);
+            printf("-------------------finestampaHash-------------------\n");
+        }
 }
