@@ -341,12 +341,16 @@ void stampaHash(icl_hash_t *hashPtr) {
 //Controlla se pathname è corretto
 int checkPathname(const char *pathname)
 {
+    if(pathname == NULL)
+        return -1;
+
     //basename può modificare pathname
     int lengthPath = strlen(pathname);
     char pathnameCopy[lengthPath+1];
     strncpy(pathnameCopy, pathname, lengthPath+1);
 
-    if(pathname == NULL || strlen(pathname) >= MAX_PATH_LENGTH-1 || strlen(pathname) <= 0 || basename(pathnameCopy) == NULL || strlen(pathnameCopy) >= MAX_FILE_LENGTH-1)
+    if(basename(pathnameCopy) == NULL || strlen(pathnameCopy) > MAX_FILE_LENGTH-1)
         return -1;
+    
     return 0;
 }
