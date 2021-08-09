@@ -36,7 +36,6 @@ int openFileServer(const char *pathname, int flags, icl_hash_t *hashPtrF, int cl
 
             serverFile = createFile(pathname, clientFd);
             CS(serverFile == NULL, "O_CREATE: impossibile creare la entry nella hash", EPERM)
-            printf("pathname prima di insert: %s\n", pathname);
 
 
             CS(icl_hash_insert(hashPtrF, (void *) pathname, (void *) serverFile) == NULL,
@@ -46,8 +45,8 @@ int openFileServer(const char *pathname, int flags, icl_hash_t *hashPtrF, int cl
 
         case O_LOCK:
             serverFile = icl_hash_find(hashPtrF, (void *) pathname);
-            CS(serverFile == NULL,
-               "O_LOCK: File non presente nella tabella hash", EPERM)
+            CS(serverFile == NULL || findSortedList(serverFile->fdOpen_SLPtr, clientFd) == -1,
+               "il file non è presente nella hash table o non è stato aperto da clientFd", EPERM)
 
 
             //GESTIONE LOCK [controllare]
@@ -104,7 +103,6 @@ static File *createFile(const char *pathname, int clientFd)
 
     return serverFile;
 }
-
 
 int readFileServer(const char *pathname, char **buf, size_t *size, icl_hash_t *hashPtrF, int clientFd)
 {
@@ -266,6 +264,37 @@ int fillStructFile(File *serverFileF)
     return 0;
 }
 
+int appendToFileServer(const char *pathname, char *buf, size_t size, const char *dirname, icl_hash_t *hashPtrF, int clientFd)
+{
+    //Argomenti invalidi
+    CS(checkPathname(pathname), "openFile: pathname sbaglito", EINVAL)
+    CS(buf == NULL || strlen(buf) + 1 != size, "appendToFile: buf == NULL || strlen(buf) + 1", EINVAL) //"size": numero byte di buf e non il numero di caratteri
+    CS(hashPtrF == NULL || clientFd < 0, "appendToFile: hashPtrF == NULL || clientFd < 0", EINVAL)
+
+    File *serverFile = icl_hash_find(hashPtrF, (void *) pathname);
+    CS(serverFile == NULL || findSortedList(serverFile->fdOpen_SLPtr, clientFd) == -1, "il file non è presente nella hash table o non è stato aperto da clientFd", EPERM)
+
+
+    //=Inserimento buffer=
+    if(serverFile->fileContent == NULL)
+    {
+        //il file è vuoto
+        RETURN_NULL_SYSCALL(serverFile->fileContent, malloc(sizeof(char) * size), "fillStructFile: malloc()") //size conta anche il '\0'
+        memset(serverFile->fileContent, '\0', size - 1);
+        strncpy(serverFile->fileContent, buf, size);
+    }
+    else
+    {
+        REALLOC(serverFile->fileContent, sizeof(char) * (serverFile->sizeFileByte + size - 1)) //il +1 è già contato in "serverFile->sizeFileByte" e in size (per questo motivo vien fatto -1)
+        CS(strncat(serverFile->fileContent, buf, size - 1) == NULL, "appendToFile: strncat", errno) //sovvrascrive in automatico il '\0' di serverFile->fileContent e ne aggiunge uno alla fine
+        serverFile->sizeFileByte = serverFile->sizeFileByte + size - 1;
+    }
+
+    serverFile->canWriteFile = 0;
+
+    return 0;
+}
+
 int closeFileServer(const char *pathname, icl_hash_t *hashPtrF, int clientFd)
 {
     CS(checkPathname(pathname), "openFile: pathname sbaglito", EINVAL)
@@ -285,22 +314,20 @@ int closeFileServer(const char *pathname, icl_hash_t *hashPtrF, int clientFd)
     return 0;
 }
 
-int appendToFileServer(const char *pathname, char *buf, size_t size, const char *dirname, icl_hash_t *hashPtrF, int clientFd)
+//manca la gestione della lock
+int removeFileServer(const char *pathname, icl_hash_t *hashPtrF, int clientFd)
 {
-    //Argomenti invalidi
-    CS(checkPathname(pathname), "openFile: pathname sbaglito", EINVAL)
-    CS(buf == NULL || strlen(buf) + 1 != size, "appendToFile: buf == NULL || strlen(buf) + 1", EINVAL) //"size": numero byte di buf e non il numero di caratteri
-    CS(hashPtrF == NULL || clientFd < 0, "appendToFile: hashPtrF == NULL || clientFd < 0", EINVAL)
+    CS(checkPathname(pathname), "removeFileServer: pathname sbaglito", EINVAL)
+    CS(hashPtrF == NULL || clientFd < 0, "ERRORE removeFileServer: pathname == NULL || hashPtrF == NULL || clientFd < 0", EINVAL)
 
     File *serverFile = icl_hash_find(hashPtrF, (void *) pathname);
-    CS(serverFile == NULL || findSortedList(serverFile->fdOpen_SLPtr, clientFd) == -1, "il file non è presente nella hash table o non è stato aperto da clientFd", EPERM)
+    CS(serverFile == NULL, "ERRORE removeFileServer: file non presente nel server", EPERM)
+    CS(findSortedList(serverFile->fdOpen_SLPtr, clientFd) == -1, "CLOSE: client non ha aperto il file", EPERM)
 
 
-    REALLOC(serverFile->fileContent, sizeof(char) * (serverFile->sizeFileByte + size - 1)) //il +1 è già contato in "serverFile->sizeFileByte" e in size (per questo motivo vien fatto -1)
-    CS(strncat(serverFile->fileContent, buf, size - 1) == NULL, "appendToFile: strncat", errno) //sovvrascrive in automatico il '\0' di serverFile->fileContent e ne aggiunge uno alla fine
-    serverFile->sizeFileByte = serverFile->sizeFileByte + size - 1;
-
-    serverFile->canWriteFile = 0;
+    //elimino il singolo file
+    CS(icl_hash_delete(hashPtrF, (void *) pathname, free, freeFileData) == -1,
+       "removeFileServer: icl_hash_delete", EPERM)
 
     return 0;
 }
@@ -326,9 +353,10 @@ void stampaHash(icl_hash_t *hashPtr) {
     icl_entry_t *entry;
     char *key;
     File *newFile;
+    printf("---------------------stampaHash---------------------\n");
     icl_hash_foreach(hashPtr, k, entry, key, newFile)
         {
-            printf("---------------------stampaHash---------------------\n");
+            printf("---------------------%s---------------------\n", key);
             printf("Chiave: %s\n", key);
             printf("Path: %s\n", newFile->path);
 //            printf("%d: cmp tra %s-%s\n", strcmp(key, newFile->path), key, newFile->path);
@@ -336,6 +364,7 @@ void stampaHash(icl_hash_t *hashPtr) {
             printf("\nfileContent:\n%s\n\n", newFile->fileContent);
             printf("sizeFileByte: %ld\n", newFile->sizeFileByte);
             stampaSortedList(newFile->fdOpen_SLPtr);
-            printf("-------------------finestampaHash-------------------\n");
+            printf("---------------------------------------------\n");
         }
+    printf("-------------------finestampaHash-------------------\n");
 }

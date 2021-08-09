@@ -1,61 +1,54 @@
-#include <stdlib.h>
-#include <string.h>
-#include "../utils/util.h"
-#include "../utils/conn.h"
-#include "../utils/utilsPathname.c"
+#include "../include/clientAPI.h"
 
-#define O_CREATE 1
-#define O_LOCK 10
-#define O_OPEN 100 //da usare se si vuole aprire il file senza crearlo o usare la lock
-
-//in caso di errore della API, il server invia l'errno; altrimenti invia questa flag
-#define API_SUCCESS 0
-
-
-int FD_SOCK;
-char SOCKNAME[MAX_BYTES_SOCKNAME];
-
-
-int openConnection(const char *sockname, int msec, const struct timespec abstime);
-int closeConnection(const char *sockname);
-int openFile(const char* pathname, int flags);
-int writeFile(const char *pathname, const char *dirname);
-int readFile(const char *pathname, char **buf, size_t *size);
-int readNFiles(int N, const char *dirname);
-int appendToFile(const char *pathname, void *buf, size_t size, const char *dirname);
-
-int checkPathname(const char *pathname);
-
-int main(int argc, char *argv[])
-{
-    CS(argc < 3, "inserire argomenti", EINVAL)
-
-    struct timespec abstime;
-    abstime.tv_sec = time(NULL) + 10;
-    SYSCALL(openConnection(argv[1], 100, abstime), "Errore");
-
-    char *pathname = getRealPath(argv[2]);
-    SYSCALL(openFile(pathname, O_CREATE), "Errore")
-
-    SYSCALL(openFile(pathname, O_LOCK), "Errore")
-    SYSCALL(writeFile(pathname, NULL), "Errore")
-    SYSCALL(readNFiles(0, "../test/readN/"), "Errore")
-    SYSCALL(appendToFile(pathname, "gatto", strlen("gatto")+1, NULL), "Errore")
-
-    char *buf;
-    size_t size;
-    SYSCALL(readFile(argv[2], &buf, &size), "Errore")
-
-    printf("BUF: %s\n", buf);
-    printf("size: %ld\n", size);
-
-    free(buf);
-
-    sleep(10);
-
-    SYSCALL(closeConnection(SOCKNAME), "Errore")
-    return 0;
-}
+//int main(int argc, char *argv[])
+//{
+//    CS(argc < 3, "inserire argomenti", EINVAL)
+//
+//    //sceglie quali istruzioni eseguire
+//    int expression = 0;
+////    printf("expression: ");
+////    scanf("%d", &expression);
+//
+//
+//    if(expression == 0)
+//    {
+//        struct timespec abstime;
+//    abstime.tv_sec = time(NULL) + 10;
+//    SYSCALL(openConnection(argv[1], 1000, abstime), "Errore");
+//
+//    char *pathname = getRealPath(argv[2]);
+//    SYSCALL(openFile(pathname, O_CREATE), "Errore")
+//
+//    SYSCALL(closeConnection(SOCKNAME), "Errore")
+//
+//    }
+//
+////    struct timespec abstime;
+////    abstime.tv_sec = time(NULL) + 10;
+////    SYSCALL(openConnection(argv[1], 1000, abstime), "Errore");
+////
+////    char *pathname = getRealPath(argv[2]);
+////    SYSCALL(openFile(pathname, O_CREATE), "Errore")
+////
+////    SYSCALL(openFile(pathname, O_LOCK), "Errore")
+////    SYSCALL(writeFile(pathname, NULL), "Errore")
+////    SYSCALL(readNFiles(0, "../test/readN/"), "Errore")
+////    SYSCALL(appendToFile(pathname, "gatto", strlen("gatto")+1, NULL), "Errore")
+////
+////    char *buf;
+////    size_t size;
+////    SYSCALL(readFile(pathname, &buf, &size), "Errore")
+////
+////    printf("BUF: %s\n", buf);
+////    printf("size: %ld\n", size);
+//
+////    free(buf);
+//
+//    sleep(3);
+//
+////    SYSCALL(closeConnection(SOCKNAME), "Errore")
+//    return 0;
+//}
 
 int openConnection(const char *sockname, int msec, const struct timespec abstime)
 {
@@ -135,7 +128,7 @@ int openFile(const char* pathname, int flags)
     //ricezione esito dell'operazione del server
     int esitoAPI;
     READN(FD_SOCK, &esitoAPI, sizeof(int), "Errore: readn()")
-    CS(esitoAPI != API_SUCCESS, "Errore openFile", esitoAPI)
+    CS(esitoAPI != API_SUCCESS, "Errore esito openFile", esitoAPI)
     PRINT("openFile eseguita con sueccesso")
 
     return 0;
@@ -161,15 +154,17 @@ int readFile(const char *pathname, char **buf, size_t *size)
     WRITEN(FD_SOCK, &pathnameBytes, sizeof(int), "readFile: writen()")
     WRITEN(FD_SOCK, temp, pathnameBytes, "readFile: writen()")
 
-    //memorizzo i dati in *buf e *size
-    READN(FD_SOCK, size, sizeof(size_t), "readFile: readn(FD_SOCK, size, sizeof(size_t))")
-    *buf = malloc(sizeof(char) * (*size));
-    READN(FD_SOCK, *buf, *size, "readFile: READN(FD_SOCK, *buf, *size)")
 
     //ricezione esito dell'operazione del server
     int esitoAPI;
     READN(FD_SOCK, &esitoAPI, sizeof(int), "readFile: readn(FD_SOCK, &esitoAPI, sizeof(int))")
     CS(esitoAPI != API_SUCCESS, "Errore readFileServer", esitoAPI)
+
+    //memorizzo i dati in *buf e *size
+    READN(FD_SOCK, size, sizeof(size_t), "readFile: readn(FD_SOCK, size, sizeof(size_t))")
+    *buf = malloc(sizeof(char) * (*size));
+    CS(*buf == NULL, "readFile: malloc", errno)
+    READN(FD_SOCK, *buf, *size, "readFile: READN(FD_SOCK, *buf, *size)")
 
     PRINT("readFile eseguita con sueccesso")
 
@@ -292,6 +287,60 @@ int appendToFile(const char *pathname, void *buf, size_t size, const char *dirna
     READN(FD_SOCK, &esitoAPI, sizeof(int), "appendToFile: readn()")
     CS(esitoAPI != API_SUCCESS, "Errore appendToFile", esitoAPI)
     PRINT("appendToFile eseguita con sueccesso")
+
+    return 0;
+}
+
+int closeFile(const char *pathname)
+{
+    //controllo argomento
+    CS(checkPathname(pathname), "closeFile: checkPathname", EINVAL)
+
+
+    //invia l'operazione della API
+    int operazione = API_CLOSEFILE;
+    WRITEN(FD_SOCK, &operazione, sizeof(int), "closeFile: writen()")
+
+    //Invia pathname
+    int pathnameBytes = strlen(pathname) + 1; //+1 per '\0'
+    char temp[pathnameBytes]; //writen non può prendere una costante [eliminare]
+    strncpy(temp, pathname, pathnameBytes);
+    WRITEN(FD_SOCK, &pathnameBytes, sizeof(int), "closeFile: writen()")
+    WRITEN(FD_SOCK, temp, pathnameBytes, "closeFile: writen()")
+
+
+    //ricezione esito dell'operazione del server
+    int esitoAPI;
+    READN(FD_SOCK, &esitoAPI, sizeof(int), "Errore: readn()")
+    CS(esitoAPI != API_SUCCESS, "Errore esito closeFile", esitoAPI)
+    PRINT("closeFile eseguita con sueccesso")
+
+    return 0;
+}
+
+int removeFile(const char *pathname)
+{
+    //controllo argomento
+    CS(checkPathname(pathname), "removeFile: checkPathname", EINVAL)
+
+
+    //invia l'operazione della API
+    int operazione = API_REMOVEFILE;
+    WRITEN(FD_SOCK, &operazione, sizeof(int), "removeFile: writen()")
+
+    //Invia pathname
+    int pathnameBytes = strlen(pathname) + 1; //+1 per '\0'
+    char temp[pathnameBytes]; //writen non può prendere una costante [eliminare]
+    strncpy(temp, pathname, pathnameBytes);
+    WRITEN(FD_SOCK, &pathnameBytes, sizeof(int), "removeFile: writen()")
+    WRITEN(FD_SOCK, temp, pathnameBytes, "removeFile: writen()")
+
+
+    //ricezione esito dell'operazione del server
+    int esitoAPI;
+    READN(FD_SOCK, &esitoAPI, sizeof(int), "removeFile: readn()")
+    CS(esitoAPI != API_SUCCESS, "removeFile esito closeFile", esitoAPI)
+    PRINT("removeFile eseguita con sueccesso")
 
     return 0;
 }
