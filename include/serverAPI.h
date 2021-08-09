@@ -4,6 +4,10 @@
 #include <stdbool.h>
 #include "../strutture_dati/sortedList/sortedList.c"
 #include "../strutture_dati/hash/icl_hash.c"
+#include "../utils/flagsAPI.h"
+#include "../strutture_dati/readers_writers_lock/readers_writers_lock.c"
+
+
 
 struct file {
     char *path;
@@ -14,18 +18,18 @@ struct file {
     //lista che memorizza l'fd dei client che hanno chiamato la open
     NodoSL *fdOpen_SLPtr;
 
+    RwLock_t fileLock;
+
+    pthread_mutex_t mutexFile;
 };
 typedef struct file File;
+
+//mutex globale per gestire la tabella hash del file system
+static pthread_mutex_t globalMutex = PTHREAD_MUTEX_INITIALIZER;
 
 
 //numero di file che il server può contenere attraverso la tabella hash (dato da prendere da config.txt) [eliminare]
 #define NUMFILE 10
-#define O_CREATE 1
-#define O_LOCK 10
-#define O_OPEN 100 //da usare se si vuole aprire il file senza crearlo o usare la lock
-
-#define MAX_PATH_LENGTH 4097 //aggiunto il +1 per contenere '\0'
-#define MAX_FILE_LENGTH 256 //aggiunto il +1 per contenere '\0'
 
 
 //Funzioni che implementano le API
@@ -35,6 +39,7 @@ int closeFileServer(const char *pathname, icl_hash_t *hashPtrF, int clientFd);
 int appendToFileServer(const char *pathname, char *buf, size_t size, const char *dirname, icl_hash_t *hashPtrF, int clientFd);
 int readFileServer(const char *pathname, char **buf, size_t *size, icl_hash_t *hashPtrF, int clientFd);
 int readNFilesServer(int N, const char *dirname, icl_hash_t *hashPtrF);
+int removeFileServer(const char *pathname, icl_hash_t *hashPtrF, int clientFd);
 
 int fillStructFile(File *serverFileF);
 static File *createFile(const char *pathname, int clientFd);
