@@ -6,6 +6,9 @@
 #include "../utils/util.h"
 #include "../utils/utilsPathname.c"
 
+static void setLockFile(File *serverFile, int clientFd);
+static void setUnlockFile(File *serverFile);
+
 //da finire [controllare]
 int openFileServer(const char *pathname, int flags, icl_hash_t *hashPtrF, int clientFd) {
     //argomenti invalidi
@@ -37,33 +40,43 @@ int openFileServer(const char *pathname, int flags, icl_hash_t *hashPtrF, int cl
             serverFile = createFile(pathname, clientFd);
             CSA(serverFile == NULL, "O_CREATE: impossibile creare la entry nella hash", EPERM, UNLOCK(&globalMutex))
 
+            START_WRITE_LOCK
 
             CSA(icl_hash_insert(hashPtrF, (void *) pathname, (void *) serverFile) == NULL,
-                "O_CREATE: impossibile inserire File nella hash", EPERM, UNLOCK(&globalMutex));
+                "O_CREATE: impossibile inserire File nella hash", EPERM, END_WRITE_LOCK);
 
             serverFile->canWriteFile = 1;
 
-            UNLOCK(&globalMutex);
+            END_WRITE_LOCK
             break;
 
         case O_LOCK:
-            CS(serverFile == NULL, "O_LOCK: File non presente", EPERM)
-            CS(findSortedList(serverFile->fdOpen_SLPtr, clientFd) == -1,
-               "il file non è presente nella hash table o non è stato aperto da clientFd", EPERM)
+            CSA(serverFile == NULL, "O_LOCK: File non presente", EPERM, UNLOCK(&globalMutex))
 
+            START_WRITE_LOCK
+
+            CSA(findSortedList(serverFile->fdOpen_SLPtr, clientFd) == 0, "O_LOCK: file già aperto dal client", EPERM, END_WRITE_LOCK)
+            insertSortedList(&(serverFile->fdOpen_SLPtr), clientFd);
+            setLockFile(serverFile, clientFd);
             serverFile->canWriteFile = 1;
-            //GESTIONE LOCK [controllare]
+
+            END_WRITE_LOCK
             break;
 
         case (O_CREATE + O_LOCK):
-            CS(serverFile != NULL, "O_CREATE + O_LOCK: File già presente", EPERM)
-            serverFile = createFile(pathname, clientFd);
-            CS(serverFile == NULL, "O_CREATE + O_LOCK: impossibile creare la entry nella hash", EPERM)
-            CS(icl_hash_insert(hashPtrF, (void *) pathname, (void *) serverFile) == NULL,
-               "O_CREATE + O_LOCK: impossibile inserire File nella hash", EPERM)
-            //GESTIONE LOCK [controllare]
+            CSA(serverFile != NULL, "O_CREATE + O_LOCK: File già presente", EPERM, UNLOCK(&globalMutex))
 
+            serverFile = createFile(pathname, clientFd);
+            CSA(serverFile == NULL, "O_CREATE + O_LOCK: impossibile creare la entry nella hash", EPERM, UNLOCK(&globalMutex))
+
+            START_WRITE_LOCK
+
+            CSA(icl_hash_insert(hashPtrF, (void *) pathname, (void *) serverFile) == NULL,
+               "O_CREATE + O_LOCK: impossibile inserire File nella hash", EPERM, END_WRITE_LOCK)
+            serverFile->lockFd = clientFd;
             serverFile->canWriteFile = 1;
+
+            END_WRITE_LOCK
             break;
 
         default:
@@ -87,7 +100,7 @@ static File *createFile(const char *pathname, int clientFd) {
     File *serverFile;
     RETURN_NULL_SYSCALL(serverFile, malloc(sizeof(File)), "createFile: serverFile = malloc(sizeof(File))")
 
-    //Inizializzo mutex:
+    //--Inizializzo mutex--:
     rwLock_init(&(serverFile->fileLock));
 
     //--inserimento pathname--
@@ -100,8 +113,16 @@ static File *createFile(const char *pathname, int clientFd) {
     serverFile->sizeFileByte = 0;
     serverFile->canWriteFile = 0; //viene impostato a 1 alla fine della openFile
 
+    //--inserimento fdOpen--
     serverFile->fdOpen_SLPtr = NULL;
     insertSortedList(&(serverFile->fdOpen_SLPtr), clientFd);
+
+    //Inizializzo fdLock
+    serverFile->lockFd = -1;
+    serverFile->fdLock_TestaPtr = NULL;
+    serverFile->fdLock_CodaPtr = NULL;
+
+
 
     return serverFile;
 }
@@ -121,6 +142,8 @@ int readFileServer(const char *pathname, char **buf, size_t *size, icl_hash_t *h
     CSA(serverFile == NULL, "il file non è presente nella hash table", EPERM, UNLOCK(&globalMutex))
 
     START_READ_LOCK
+
+    IS_FILE_LOCKED(END_READ_LOCK)
 
     CSA(findSortedList(serverFile->fdOpen_SLPtr, clientFd) == -1,
         "il file non è stato aperto da clientFd", EPERM, END_READ_LOCK)
@@ -223,6 +246,8 @@ int writeFileServer(const char *pathname, const char *dirname, icl_hash_t *hashP
 
     START_WRITE_LOCK
 
+    IS_FILE_LOCKED(END_WRITE_LOCK)
+
     CSA(findSortedList(serverFile->fdOpen_SLPtr, clientFd) == -1,
         "writeFileServer: il file non è stato aperto da clientFd", EPERM, END_WRITE_LOCK)
     //l'ultima operazione non era una open || il file non è vuoto
@@ -272,8 +297,7 @@ int fillStructFile(File *serverFileF) {
     return 0;
 }
 
-int appendToFileServer(const char *pathname, char *buf, size_t size, const char *dirname, icl_hash_t *hashPtrF,
-                       int clientFd) {
+int appendToFileServer(const char *pathname, char *buf, size_t size, const char *dirname, icl_hash_t *hashPtrF, int clientFd) {
     //Argomenti invalidi
     CS(checkPathname(pathname), "openFile: pathname sbaglito", EINVAL)
     CS(buf == NULL || strlen(buf) + 1 != size, "appendToFile: buf == NULL || strlen(buf) + 1",
@@ -287,8 +311,9 @@ int appendToFileServer(const char *pathname, char *buf, size_t size, const char 
 
     START_WRITE_LOCK
 
-    CSA(findSortedList(serverFile->fdOpen_SLPtr, clientFd) == -1, "il file non è stato aperto da clientFd", EPERM, END_WRITE_LOCK)
+    IS_FILE_LOCKED(END_WRITE_LOCK)
 
+    CSA(findSortedList(serverFile->fdOpen_SLPtr, clientFd) == -1, "File non aperto da clientFd", EPERM, END_WRITE_LOCK)
     //=Inserimento buffer=
     if (serverFile->fileContent == NULL)
     {
@@ -296,6 +321,7 @@ int appendToFileServer(const char *pathname, char *buf, size_t size, const char 
         RETURN_NULL_SYSCALL(serverFile->fileContent, malloc(sizeof(char) * size), "fillStructFile: malloc()") //size conta anche il '\0'
         memset(serverFile->fileContent, '\0', size - 1);
         strncpy(serverFile->fileContent, buf, size);
+        serverFile->sizeFileByte = size;
     }
     else
     {
@@ -305,6 +331,58 @@ int appendToFileServer(const char *pathname, char *buf, size_t size, const char 
     }
 
     serverFile->canWriteFile = 0;
+
+    END_WRITE_LOCK
+
+    return 0;
+}
+
+int lockFileServer(const char *pathname, icl_hash_t *hashPtrF, int clientFd)
+{
+    CS(checkPathname(pathname), "lockFileServer: pathname sbaglito", EINVAL)
+
+    LOCK(&globalMutex);
+
+    CSA(hashPtrF == NULL, "lockFileServer: pathname == NULL", EINVAL, UNLOCK(&globalMutex))
+    File *serverFile = icl_hash_find(hashPtrF, (void *) pathname);
+    CSA(serverFile == NULL, "lockFileServer: file non presente nel server", EPERM, UNLOCK(&globalMutex))
+
+    START_WRITE_LOCK
+
+    CSA(findSortedList(serverFile->fdOpen_SLPtr, clientFd) == -1,
+        "lockFileServer: il file non è stato aperto da clientFd", EPERM, END_WRITE_LOCK)
+
+    setLockFile(serverFile, clientFd);
+
+    serverFile->canWriteFile = 0;
+
+
+    END_WRITE_LOCK
+
+    return 0;
+}
+
+int unlockFileServer(const char *pathname, icl_hash_t *hashPtrF, int clientFd)
+{
+    CS(checkPathname(pathname), "unlockFileServer: pathname sbaglito", EINVAL)
+
+    LOCK(&globalMutex);
+
+    CSA(hashPtrF == NULL, "unlockFileServer: pathname == NULL", EINVAL, UNLOCK(&globalMutex))
+    File *serverFile = icl_hash_find(hashPtrF, (void *) pathname);
+    CSA(serverFile == NULL, "unlockFileServer: file non presente nel server", EPERM, UNLOCK(&globalMutex))
+
+    START_WRITE_LOCK
+
+    CSA(findSortedList(serverFile->fdOpen_SLPtr, clientFd) == -1,
+        "unlockFileServer: il file non è stato aperto da clientFd", EPERM, END_WRITE_LOCK)
+
+    CSA(serverFile->lockFd != clientFd, "unlockFileServer: non hai la lock", EPERM, END_WRITE_LOCK)
+
+    setUnlockFile(serverFile);
+
+    serverFile->canWriteFile = 0;
+
 
     END_WRITE_LOCK
 
@@ -335,25 +413,27 @@ int closeFileServer(const char *pathname, icl_hash_t *hashPtrF, int clientFd) {
 int removeFileServer(const char *pathname, icl_hash_t *hashPtrF, int clientFd) {
     CS(checkPathname(pathname), "removeFileServer: pathname sbaglito", EINVAL)
 
-    LOCK(&globalMutex);
+    LOCK(&globalMutex) //NON posso usare la lock locale perché File viene eliminato
+
     CSA(hashPtrF == NULL, "removeFileServer: hashPtrF == NULL", EINVAL, UNLOCK(&globalMutex))
     File *serverFile = icl_hash_find(hashPtrF, (void *) pathname);
     CSA(serverFile == NULL, "ERRORE removeFileServer: file non presente nel server", EPERM, UNLOCK(&globalMutex))
 
-    START_WRITE_LOCK
+    IS_FILE_LOCKED(UNLOCK(&globalMutex))
+
 
     CSA(findSortedList(serverFile->fdOpen_SLPtr, clientFd) == -1, "removeFileServer: client non ha aperto il file",
-        EPERM, END_WRITE_LOCK)
+        EPERM, UNLOCK(&globalMutex))
 
     //elimino il singolo file
     CSA(icl_hash_delete(hashPtrF, (void *) pathname, free, freeFileData) == -1, "removeFileServer: icl_hash_delete", EPERM, END_WRITE_LOCK)
-    END_WRITE_LOCK
+
+    UNLOCK(&globalMutex)
 
     return 0;
 }
 
-
-//Rimuove il Fd del client quando questo chiude la connessione
+//Rimuove il Fd e la lock del client quando questo chiude la connessione
 int removeClientInfo(icl_hash_t *hashPtrF, int clientFd)
 {
     LOCK(&globalMutex)
@@ -366,6 +446,18 @@ int removeClientInfo(icl_hash_t *hashPtrF, int clientFd)
     File *newFile;
     icl_hash_foreach(hashPtrF, k, entry, key, newFile)
     {
+            //--elimino la lock--
+            if(newFile->lockFd == clientFd)
+            {
+                setUnlockFile(newFile);
+            }
+            else
+            {
+                //elimino clientId dalla coda se è presente
+                deleteDataQueue(&(newFile->fdLock_TestaPtr), &(newFile->fdLock_CodaPtr), clientFd);
+            }
+
+            //elimino l'fd dalla lista dei fd che hanno fatto la open
             deleteSortedList(&(newFile->fdOpen_SLPtr), clientFd);
     }
 
@@ -373,16 +465,38 @@ int removeClientInfo(icl_hash_t *hashPtrF, int clientFd)
     return 0;
 }
 
+//Funzione di supporto che imposta la lock di un file
+static void setLockFile(File *serverFile, int clientFd)
+{
+    if(serverFile->lockFd == -1)
+        serverFile->lockFd = clientFd;
+    else if(findDataQueue(serverFile->fdLock_TestaPtr, clientFd) == 0 && serverFile->lockFd != clientFd)
+        push(&(serverFile->fdLock_TestaPtr), &(serverFile->fdLock_CodaPtr), clientFd);
+}
+
+//Funzione di supporto che elimina la lock di un file
+static void setUnlockFile(File *serverFile)
+{
+    if(serverFile->fdLock_TestaPtr == NULL)
+        serverFile->lockFd = -1;
+    else
+        serverFile->lockFd = pop(&(serverFile->fdLock_TestaPtr), &(serverFile->fdLock_CodaPtr));
+}
+
 //elimina tutti i dati compresi in serverFile (ed elimina lo stesso serverFile)
-void freeFileData(void *serverFile) {
+void freeFileData(void *serverFile)
+{
     File *serverFileF = serverFile;
 
-    if (serverFileF->path != NULL)
+    if (serverFileF->path != NULL) {
         free(serverFileF->path);
-    if (serverFileF->fileContent != NULL)
+    }
+    if (serverFileF->fileContent != NULL) {
         free(serverFileF->fileContent);
-    if (serverFileF->fdOpen_SLPtr != NULL)
+    }
+    if (serverFileF->fdOpen_SLPtr != NULL) {
         freeSortedList(&(serverFileF->fdOpen_SLPtr));
+    }
 
     free(serverFileF);
 }
@@ -403,6 +517,9 @@ void stampaHash(icl_hash_t *hashPtr) {
             printf("\nfileContent:\n%s\n\n", newFile->fileContent);
             printf("sizeFileByte: %ld\n", newFile->sizeFileByte);
             stampaSortedList(newFile->fdOpen_SLPtr);
+            puts("");
+            printf("Lock: %d\n", newFile->lockFd);
+            stampa(newFile->fdLock_TestaPtr);
 
             puts("");
             RwLock_t tempFileLock = newFile->fileLock;

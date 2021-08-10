@@ -318,6 +318,61 @@ int closeFile(const char *pathname)
     return 0;
 }
 
+int lockFile(const char *pathname)
+{
+    //controllo argomento
+    CS(checkPathname(pathname), "lockFile: checkPathname", EINVAL)
+
+
+    //invia l'operazione della API
+    int operazione = API_LOCKFILE;
+    WRITEN(FD_SOCK, &operazione, sizeof(int), "lockFile: writen()")
+
+    //Invia pathname
+    int pathnameBytes = strlen(pathname) + 1; //+1 per '\0'
+    char temp[pathnameBytes]; //writen non può prendere una costante [eliminare]
+    strncpy(temp, pathname, pathnameBytes);
+    WRITEN(FD_SOCK, &pathnameBytes, sizeof(int), "lockFile: writen()")
+    WRITEN(FD_SOCK, temp, pathnameBytes, "lockFile: writen()")
+
+
+    //ricezione esito dell'operazione del server
+    int esitoAPI;
+    READN(FD_SOCK, &esitoAPI, sizeof(int), "lockFile: readn()")
+    CS(esitoAPI != API_SUCCESS, "Errore esito closeFile", esitoAPI)
+    PRINT("lockFile eseguita con sueccesso")
+
+    return 0;
+}
+
+int unlockFile(const char *pathname)
+{
+    //controllo argomento
+    CS(checkPathname(pathname), "unlockFile: checkPathname", EINVAL)
+
+
+    //invia l'operazione della API
+    int operazione = API_UNLOCKFILE;
+    WRITEN(FD_SOCK, &operazione, sizeof(int), "unlockFile: writen()")
+
+    //Invia pathname
+    int pathnameBytes = strlen(pathname) + 1; //+1 per '\0'
+    char temp[pathnameBytes]; //writen non può prendere una costante [eliminare]
+    strncpy(temp, pathname, pathnameBytes);
+    WRITEN(FD_SOCK, &pathnameBytes, sizeof(int), "unlockFile: writen()")
+    WRITEN(FD_SOCK, temp, pathnameBytes, "unlockFile: writen()")
+
+
+    //ricezione esito dell'operazione del server
+    int esitoAPI;
+    READN(FD_SOCK, &esitoAPI, sizeof(int), "unlockFile: readn()")
+    CS(esitoAPI != API_SUCCESS, "Errore esito unlockFile", esitoAPI)
+    PRINT("unlockFile eseguita con sueccesso")
+
+    return 0;
+}
+
+
 int removeFile(const char *pathname)
 {
     //controllo argomento
