@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include "../strutture_dati/sortedList/sortedList.c"
+#include "../strutture_dati/queueInt/queue.c"
 #include "../strutture_dati/hash/icl_hash.c"
 #include "../utils/flagsAPI.h"
 #include "../strutture_dati/readers_writers_lock/readers_writers_lock.c"
@@ -15,17 +16,42 @@ struct file {
     size_t sizeFileByte; //tiene conto anche del '\0'
     bool canWriteFile; //1: se si può fare la WriteFile(), 0 altrimenti
 
-    //lista che memorizza l'fd dei client che hanno chiamato la open
-    NodoSL *fdOpen_SLPtr;
+    NodoSL *fdOpen_SLPtr; //lista che memorizza l'fd dei client che hanno chiamato la open
 
-    RwLock_t fileLock;
+    int lockFd; //fd di chi ha la lock (-1 se nessuno ha la lock)
+    NodoQi *fdLock_TestaPtr; //fd in attesa di acquisire la lock (è una coda)
+    NodoQi *fdLock_CodaPtr; //fd in attesa di acquisire la lock (è una coda)
 
-    pthread_mutex_t mutexFile;
+    RwLock_t fileLock; //struttura dati per gestire la concorrenza
 };
 typedef struct file File;
 
 //mutex globale per gestire la tabella hash del file system
 static pthread_mutex_t globalMutex = PTHREAD_MUTEX_INITIALIZER;
+
+//Ritorna errore se chi chiama la funzione dell'API NON possiede la lock (ins rappresenta un insieme di istruzioni)
+#define IS_FILE_LOCKED(ins)                                         \
+if(serverFile->lockFd != -1 && serverFile->lockFd != clientFd)      \
+{                                                                   \
+    errno = EACCES;                                                 \
+    PRINT("File lockato");                                          \
+    ins;                                                            \
+    return -1;                                                      \
+}                                                                   \
+
+
+//In caso di errore, elimina la lock (se presente)
+#define REMOVE_FILELOCK                                                                             \
+if(serverFile->lockFd == clientFd)                                                                  \
+    setUnlockFile(serverFile);                                                                      \
+else                                                                                                \
+    deleteDataQueue(&(serverFile->fdLock_TestaPtr), &(serverFile->fdLock_CodaPtr), clientFd);       \
+
+
+//In caso di errore, elimina l'fd dalla lista dei fd aperti
+#define REMOVE_FDOPEN deleteSortedList(&(serverFile->fdOpen_SLPtr), clientFd);
+
+#define CLEAN_FILE REMOVE_FILELOCK REMOVE_FDOPEN
 
 //Gestione lock per la API in "lettura"
 #define START_READ_LOCK                             \
