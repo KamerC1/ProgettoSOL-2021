@@ -27,6 +27,30 @@ typedef struct file File;
 //mutex globale per gestire la tabella hash del file system
 static pthread_mutex_t globalMutex = PTHREAD_MUTEX_INITIALIZER;
 
+//Gestione lock per la API in "lettura"
+#define START_READ_LOCK                             \
+    LOCK(&(serverFile->fileLock.mutexFile))         \
+    UNLOCK(&globalMutex)                            \
+    rwLock_startReading(&serverFile->fileLock);     \
+    UNLOCK(&(serverFile->fileLock.mutexFile))       \
+
+#define END_READ_LOCK                               \
+    LOCK(&(serverFile->fileLock.mutexFile))         \
+    rwLock_endReading(&serverFile->fileLock);       \
+    UNLOCK(&(serverFile->fileLock.mutexFile))       \
+
+//Gestione lock per la API in "scrittura"
+#define START_WRITE_LOCK                            \
+    LOCK(&(serverFile->fileLock.mutexFile))         \
+    UNLOCK(&globalMutex)                            \
+    rwLock_startWriting(&serverFile->fileLock);     \
+    UNLOCK(&(serverFile->fileLock.mutexFile))       \
+
+#define END_WRITE_LOCK                              \
+    LOCK(&(serverFile->fileLock.mutexFile))         \
+    rwLock_endWriting(&serverFile->fileLock);     \
+    UNLOCK(&(serverFile->fileLock.mutexFile))       \
+
 
 //numero di file che il server può contenere attraverso la tabella hash (dato da prendere da config.txt) [eliminare]
 #define NUMFILE 10
