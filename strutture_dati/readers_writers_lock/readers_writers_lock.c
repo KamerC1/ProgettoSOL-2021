@@ -2,20 +2,12 @@
 #include <stdbool.h>
 #include <pthread.h>
 #include "../../utils/util.h"
-
-struct rwLockStruct{
-    pthread_mutex_t mutexFile;  //g
-    pthread_cond_t condFile;    //cond
-    unsigned int num_readers_active;
-    unsigned int num_writers_waiting;
-    bool writer_active;
-};
-    typedef struct rwLockStruct RwLock_t;
+#include "readers_writers_lock.h"
 
 void rwLock_init(RwLock_t *rwLockF)
 {
-    SYSCALL(pthread_mutex_init(&(rwLockF->mutexFile), NULL), "rwLock_init: pthread_mutex_init")
-    SYSCALL(pthread_cond_init(&(rwLockF->condFile), NULL), "rwLock_init: pthread_cond_init")
+    SYSCALL_NOTZERO(pthread_mutex_init(&(rwLockF->mutexFile), NULL), "rwLock_init: pthread_mutex_init")
+    SYSCALL_NOTZERO(pthread_cond_init(&(rwLockF->condFile), NULL), "rwLock_init: pthread_cond_init")
 
     rwLockF->num_readers_active = 0;
     rwLockF->num_writers_waiting = 0;

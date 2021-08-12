@@ -29,13 +29,16 @@ void push(NodoQiPtr *testaPtrF, NodoQiPtr *codaPtrF, int dataF)
     }
 }
 
-int pop(NodoQiPtr *lPtrF)
+int pop(NodoQiPtr *lPtrF, NodoQiPtr *codaPtr)
 {
     if(*lPtrF != NULL)
     {
         int value = (*lPtrF)->data;
         NodoQiPtr tempPtr = *lPtrF;
         *lPtrF = (*lPtrF)->prossimoPtr;
+        if(*lPtrF == NULL)
+            *codaPtr = NULL;
+
         free(tempPtr);
 
         return value;
@@ -58,6 +61,71 @@ int top(NodoQiPtr lPtrF)
         puts("la lista è vuota");
         exit(EXIT_FAILURE);
     }
+}
+
+//ritorna 1 se trova data, 0 altrimenti
+int findDataQueue(NodoQiPtr lPtr, int data)
+{
+    if(lPtr == NULL)
+    {
+        return 0;
+    }
+    if(lPtr->data == data)
+    {
+        return 1;
+    }
+    else
+        findDataQueue(lPtr->prossimoPtr, data);
+}
+
+//elimina il "data" dalla coda- Ritorna 0 in caso di successo, -1 altrimenti
+int deleteDataQueue(NodoQiPtr *lPtr, NodoQiPtr *codaPtr, int data)
+{
+    if (*lPtr != NULL)
+    {
+        if (data == (*lPtr)->data)
+        {
+
+            NodoQiPtr tempPtr = *lPtr;
+            *lPtr = (*lPtr)->prossimoPtr;
+
+            if(*lPtr == NULL)
+            {
+                *codaPtr = NULL;
+            }
+
+            free(tempPtr);
+
+            return 0;
+        }
+        else
+        {
+            NodoQiPtr precedentePtr = *lPtr;
+            NodoQiPtr correntePtr = (*lPtr)->prossimoPtr;
+            while (correntePtr != NULL && correntePtr->data != data)
+            {
+                precedentePtr = correntePtr;
+                correntePtr = correntePtr->prossimoPtr;
+            }
+            if (correntePtr != NULL)
+            {
+                NodoQiPtr tempPtr = correntePtr;
+                precedentePtr->prossimoPtr = correntePtr->prossimoPtr;
+
+                //Data è posizionato alla fine della coda
+                if(*codaPtr == tempPtr)
+                {
+                    //Data è posizionato alla fine della coda
+                    *codaPtr = precedentePtr;
+                }
+
+                free(tempPtr);
+
+                return 0;
+            }
+        }
+    }
+    return -1;
 }
 
 void stampa(NodoQiPtr lPtrF)

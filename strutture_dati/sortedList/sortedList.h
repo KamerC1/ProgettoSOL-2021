@@ -1,3 +1,6 @@
+#ifndef soertedList_h
+#define soertedList_h
+
 struct nodoSL
 {
     int dato;
@@ -14,3 +17,5 @@ int findSortedList(NodoSLPtr lPtr, int valore);
 int deleteSortedList(NodoSLPtr *lPtr, int val);
 void stampaSortedList(NodoSLPtr lPtr);
 void freeSortedList(NodoSLPtr *lPtrF);
+
+#endif
