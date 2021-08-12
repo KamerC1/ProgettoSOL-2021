@@ -1,21 +1,38 @@
 #include <stdio.h>
 #include <dirent.h>
 #include <sys/unistd.h>
+#include <assert.h>
 
-#include "../include/serverAPI.h"
 #include "../utils/util.h"
 #include "../utils/utilsPathname.c"
+#include "../include/serverAPI.h"
+#include "../strutture_dati/sortedList/sortedList.h"
+#include "../strutture_dati/queueInt/queue.h"
+#include "../strutture_dati/queueChar/queueChar.h"
+#include "../include/cacheFile.h"
+#include "../strutture_dati/readers_writers_lock/readers_writers_lock.h"
+#include "../strutture_dati/hash/icl_hash.h"
+
 
 static void setLockFile(File *serverFile, int clientFd);
 static void setUnlockFile(File *serverFile);
+void removeLock(File *serverFile, int clientFd);
+
+//int main()
+//{
+//
+//}
+
 
 //da finire [controllare]
-int openFileServer(const char *pathname, int flags, icl_hash_t *hashPtrF, int clientFd) {
+int openFileServer(const char *pathname, int flags, ServerStorage *storage, int clientFd) {
     //argomenti invalidi
     CS(checkPathname(pathname), "openFile: pathname sbaglito", EINVAL)
 
     LOCK(&globalMutex)
-    CS(hashPtrF == NULL, "openFile: hashPtrF == NULL", EINVAL)
+    CS(storage == NULL, "openFile: storage == NULL", EINVAL)
+    icl_hash_t *hashPtrF = storage->fileSystem;
+    assert(hashPtrF != NULL);
     File *serverFile = icl_hash_find(hashPtrF, (void *) pathname);
 
     switch (flags) {
@@ -42,9 +59,8 @@ int openFileServer(const char *pathname, int flags, icl_hash_t *hashPtrF, int cl
 
             START_WRITE_LOCK
 
-            CSA(icl_hash_insert(hashPtrF, (void *) pathname, (void *) serverFile) == NULL,
-                "O_CREATE: impossibile inserire File nella hash", EPERM, END_WRITE_LOCK);
-
+            addFile2Storage(serverFile, storage);
+            NULL_SYSCALL(icl_hash_insert(hashPtrF, (void *) pathname, (void *) serverFile), "O_CREATE: impossibile inserire File nella hash")
             serverFile->canWriteFile = 1;
 
             END_WRITE_LOCK
@@ -71,8 +87,10 @@ int openFileServer(const char *pathname, int flags, icl_hash_t *hashPtrF, int cl
 
             START_WRITE_LOCK
 
-            CSA(icl_hash_insert(hashPtrF, (void *) pathname, (void *) serverFile) == NULL,
-               "O_CREATE + O_LOCK: impossibile inserire File nella hash", EPERM, END_WRITE_LOCK)
+            addFile2Storage(serverFile, storage);
+            NULL_SYSCALL(icl_hash_insert(hashPtrF, (void *) pathname, (void *) serverFile),
+                "O_CREATE + O_LOCK: impossibile inserire File nella hash")
+
             serverFile->lockFd = clientFd;
             serverFile->canWriteFile = 1;
 
@@ -132,10 +150,10 @@ int readFileServer(const char *pathname, char **buf, size_t *size, icl_hash_t *h
     *size = 0;
     *buf = NULL;
     //argomenti invalidi
-    CS(checkPathname(pathname), "openFile: pathname sbaglito", EINVAL)
+    CS(checkPathname(pathname), "readFileServer: pathname sbaglito", EINVAL)
 
     LOCK(&globalMutex)
-    CSA(hashPtrF == NULL, "openFile: hashPtrF == NULL", EINVAL, UNLOCK(&globalMutex))
+    CSA(hashPtrF == NULL, "readFileServer: hashPtrF == NULL", EINVAL, UNLOCK(&globalMutex))
 
     File *serverFile = icl_hash_find(hashPtrF, (void *) pathname);
     //il file non è presente nella hash table o non è stato aperto da clientFd
@@ -150,7 +168,7 @@ int readFileServer(const char *pathname, char **buf, size_t *size, icl_hash_t *h
 
 
     *size = serverFile->sizeFileByte;
-    RETURN_NULL_SYSCALL(*buf, malloc(*size), "readFile: *buf = malloc(*size)")
+    RETURN_NULL_SYSCALL(*buf, malloc(*size), "readFileServer: *buf = malloc(*size)")
     memset(*buf, '\0', *size);
 
     strncpy(*buf, serverFile->fileContent, serverFile->sizeFileByte);
@@ -172,7 +190,7 @@ int readNFilesServer(int N, const char *dirname, icl_hash_t *hashPtrF) {
 
     //==Calcola il path dove lavora il processo==
     //calcolo la lunghezza del path [eliminare]
-    char *temp = getcwd(NULL, MAX_PATH_LENGTH);
+    char *temp = getcwd(NULL, PATH_MAX);
     CS(temp == NULL, "readNFiles: getcwd", errno)
     int pathLength = strlen(temp); //il +1 è già compreso in MAX_PATH_LENGTH
     free(temp);
@@ -234,12 +252,14 @@ int createReadNFiles(int N, icl_hash_t *hashPtrF) {
 }
 
 //manca buona parte della funzione - [controllare]
-int writeFileServer(const char *pathname, const char *dirname, icl_hash_t *hashPtrF, int clientFd) {
+int writeFileServer(const char *pathname, const char *dirname, ServerStorage *storage, int clientFd) {
     //Argomenti invalidi
     CS(checkPathname(pathname), "openFile: pathname sbaglito", EINVAL)
 
     LOCK(&globalMutex)
-    CSA(hashPtrF == NULL, "writeFileServer: hashPtrF == NULL", EINVAL, UNLOCK(&globalMutex))
+    CSA(storage == NULL, "writeFileServer: storage == NULL", EINVAL, UNLOCK(&globalMutex))
+    icl_hash_t *hashPtrF = storage->fileSystem;
+    assert(hashPtrF != NULL);
 
     File *serverFile = icl_hash_find(hashPtrF, (void *) pathname);
     CSA(serverFile == NULL, "writeFileServer: il file non è presente nella hash table", EPERM, UNLOCK(&globalMutex))
@@ -255,9 +275,9 @@ int writeFileServer(const char *pathname, const char *dirname, icl_hash_t *hashP
         "l'ultima operazione non era una open || il file non è vuoto", EPERM, END_WRITE_LOCK)
 
     //ripristino "sizeFileByte" in caso di errore perché fillStructFile() non lo fa.
-    CSA(fillStructFile(serverFile) == -1, "", errno,
-        serverFile->sizeFileByte = 0; END_WRITE_LOCK)
+    CSA(fillStructFile(serverFile, storage, dirname) == -1, "", errno, serverFile->sizeFileByte = 0; END_WRITE_LOCK)
     serverFile->canWriteFile = 0;
+
 
     END_WRITE_LOCK
 
@@ -265,7 +285,9 @@ int writeFileServer(const char *pathname, const char *dirname, icl_hash_t *hashP
 }
 
 //riempe i campi dello struct "File" a partire da file in disk con pathname: "pathname". Restituisce il dato "File"
-int fillStructFile(File *serverFileF) {
+int fillStructFile(File *serverFileF, ServerStorage *storage, const char *dirname)
+{
+    CS(storage == NULL, "fillStructFile: storage == NULL", EINVAL)
     CS(serverFileF == NULL, "fillStructFile: serverFileF == NULL", EINVAL)
 
 
@@ -276,36 +298,50 @@ int fillStructFile(File *serverFileF) {
     rewind(diskFile);
     CSA(fseek(diskFile, 0L, SEEK_END) == -1, "fillStructFile: fseek", errno, FCLOSE(diskFile))
 
-    serverFileF->sizeFileByte = ftell(diskFile);
-    CSA(serverFileF->sizeFileByte == -1, "fillStructFile: fseek", errno, FCLOSE(diskFile))
+    size_t numCharFile = ftell(diskFile);
+    CSA(numCharFile == -1, "fillStructFile: fseek", errno, FCLOSE(diskFile))
+    CSA(storage->maxStorageBytes < numCharFile+1, "fillStructFile: spazio non sufficiente", ENOMEM, FCLOSE(diskFile))
 
     rewind(diskFile); //riposiziono il puntatore - [eliminare]
+    serverFileF->sizeFileByte = numCharFile + 1; //memorizza anche il '\0' (perché anche esso occupa spazio)
 
-    size_t numCharFile = serverFileF->sizeFileByte; //numero di caratteri presente nel file
-    serverFileF->sizeFileByte += 1; //memorizza anche il '\0' (perché anche esso occupa spazio)
+    //lista che memorizza i file da copiare in dirname
+    NodoQi_file *testaFilePtr = NULL;
+    NodoQi_file *codaFilePtr = NULL;
+    if(dirname != NULL)
+        addBytes2Storage(serverFileF, storage, &testaFilePtr, &codaFilePtr, 1);
+    else
+        addBytes2Storage(serverFileF, storage, &testaFilePtr, &codaFilePtr, 0);
 
 
     //-Inserimento fileContent-
-    RETURN_NULL_SYSCALL(serverFileF->fileContent, malloc(sizeof(char) * numCharFile + 1), "fillStructFile: malloc()")
-    memset(serverFileF->fileContent, '\0', numCharFile + 1);
-    size_t readLength = fread(serverFileF->fileContent, 1, numCharFile,
-                              diskFile); //size: 1 perché si legge 1 byte alla volta [eliminare]
+    RETURN_NULL_SYSCALL(serverFileF->fileContent, malloc(sizeof(char) * serverFileF->sizeFileByte), "fillStructFile: malloc()")
+    memset(serverFileF->fileContent, '\0', serverFileF->sizeFileByte);
+    size_t readLength = fread(serverFileF->fileContent, 1, serverFileF->sizeFileByte - 1, diskFile); //size: 1 perché si legge 1 byte alla volta [eliminare]
     //Controllo errore fread
     CS(readLength != numCharFile || ferror(diskFile), "fillStructFile: fread", errno)
 
     FCLOSE(diskFile)
+
+    if(dirname != NULL)
+        CS(copyFile2Dir(&testaFilePtr, &codaFilePtr, dirname) == -1, "appendToFileServer: copyFile2Dir", errno)
+
     return 0;
 }
 
-int appendToFileServer(const char *pathname, char *buf, size_t size, const char *dirname, icl_hash_t *hashPtrF, int clientFd) {
+int appendToFileServer(const char *pathname, char *buf, size_t size, const char *dirname, ServerStorage *storage, int clientFd) {
     //Argomenti invalidi
     CS(checkPathname(pathname), "openFile: pathname sbaglito", EINVAL)
-    CS(buf == NULL || strlen(buf) + 1 != size, "appendToFile: buf == NULL || strlen(buf) + 1",
-       EINVAL) //"size": numero byte di buf e non il numero di caratteri
+    CS(buf == NULL || strlen(buf) + 1 != size, "appendToFile: buf == NULL || strlen(buf) + 1", EINVAL) //"size": numero byte di buf e non il numero di caratteri
 
     LOCK(&globalMutex)
 
-    CSA(hashPtrF == NULL, "appendToFile: hashPtrF == NULL", EINVAL, UNLOCK(&globalMutex))
+    CSA(storage == NULL, "appendToFile: storage == NULL", EINVAL, UNLOCK(&globalMutex))
+    CSA(storage->maxStorageBytes < size, "appendToFileServer: spazio non sufficiente", ENOMEM, UNLOCK(&globalMutex))
+
+    icl_hash_t *hashPtrF = storage->fileSystem;
+    assert(hashPtrF != NULL);
+
     File *serverFile = icl_hash_find(hashPtrF, (void *) pathname);
     CSA(serverFile == NULL, "il file non è presente nella hash table", EPERM, UNLOCK(&globalMutex))
 
@@ -314,21 +350,33 @@ int appendToFileServer(const char *pathname, char *buf, size_t size, const char 
     IS_FILE_LOCKED(END_WRITE_LOCK)
 
     CSA(findSortedList(serverFile->fdOpen_SLPtr, clientFd) == -1, "File non aperto da clientFd", EPERM, END_WRITE_LOCK)
+
+    //lista che memorizza i file da copiare in dirname
+    NodoQi_file *testaFilePtr = NULL;
+    NodoQi_file *codaFilePtr = NULL;
+    bool canCopy2Dir = 0; //1: copiare contenuto file in dirname, 0 altrimenti
+    if(dirname != NULL)
+        canCopy2Dir = 1;
     //=Inserimento buffer=
     if (serverFile->fileContent == NULL)
     {
         //il file è vuoto
+        serverFile->sizeFileByte = size;
+        addBytes2Storage(serverFile, storage, &testaFilePtr, &codaFilePtr, canCopy2Dir);
         RETURN_NULL_SYSCALL(serverFile->fileContent, malloc(sizeof(char) * size), "fillStructFile: malloc()") //size conta anche il '\0'
         memset(serverFile->fileContent, '\0', size - 1);
         strncpy(serverFile->fileContent, buf, size);
-        serverFile->sizeFileByte = size;
     }
     else
     {
-        REALLOC(serverFile->fileContent, sizeof(char) * (serverFile->sizeFileByte + size - 1)) //il +1 è già contato in "serverFile->sizeFileByte" e in size (per questo motivo vien fatto -1)
-        CSA(strncat(serverFile->fileContent, buf, size - 1) == NULL, "appendToFile: strncat", errno, END_WRITE_LOCK) //sovvrascrive in automatico il '\0' di serverFile->fileContent e ne aggiunge uno alla fine
         serverFile->sizeFileByte = serverFile->sizeFileByte + size - 1;
+        addBytes2Storage(serverFile, storage, &testaFilePtr, &codaFilePtr, canCopy2Dir);
+        REALLOC(serverFile->fileContent, sizeof(char) * serverFile->sizeFileByte) //il +1 è già contato in "serverFile->sizeFileByte" e in size (per questo motivo vien fatto -1)
+        strncat(serverFile->fileContent, buf, size - 1); //sovvrascrive in automatico il '\0' di serverFile->fileContent e ne aggiunge uno alla fine
     }
+
+    if(dirname != NULL)
+        CSA(copyFile2Dir(&testaFilePtr, &codaFilePtr, dirname) == -1, "appendToFileServer: copyFile2Dir", errno, END_WRITE_LOCK)
 
     serverFile->canWriteFile = 0;
 
@@ -402,6 +450,8 @@ int closeFileServer(const char *pathname, icl_hash_t *hashPtrF, int clientFd) {
 
     //se fd ha aperto il file, questo'ultimo viene chiuso
     CSA(deleteSortedList(&(serverFile->fdOpen_SLPtr), clientFd) == -1, "CLOSE: client non ha aperto il file", EPERM, END_WRITE_LOCK)
+    removeLock(serverFile, clientFd);
+
     serverFile->canWriteFile = 0;
 
     END_WRITE_LOCK
@@ -409,13 +459,15 @@ int closeFileServer(const char *pathname, icl_hash_t *hashPtrF, int clientFd) {
     return 0;
 }
 
-//manca la gestione della lock [eliminare]
-int removeFileServer(const char *pathname, icl_hash_t *hashPtrF, int clientFd) {
+int removeFileServer(const char *pathname, ServerStorage *storage, int clientFd) {
     CS(checkPathname(pathname), "removeFileServer: pathname sbaglito", EINVAL)
 
     LOCK(&globalMutex) //NON posso usare la lock locale perché File viene eliminato
 
-    CSA(hashPtrF == NULL, "removeFileServer: hashPtrF == NULL", EINVAL, UNLOCK(&globalMutex))
+    CSA(storage == NULL, "removeFileServer: storage == NULL", EINVAL, UNLOCK(&globalMutex))
+    icl_hash_t *hashPtrF = storage->fileSystem;
+    assert(hashPtrF != NULL);
+
     File *serverFile = icl_hash_find(hashPtrF, (void *) pathname);
     CSA(serverFile == NULL, "ERRORE removeFileServer: file non presente nel server", EPERM, UNLOCK(&globalMutex))
 
@@ -426,7 +478,16 @@ int removeFileServer(const char *pathname, icl_hash_t *hashPtrF, int clientFd) {
         EPERM, UNLOCK(&globalMutex))
 
     //elimino il singolo file
+    size_t tempSizeBytes = serverFile->sizeFileByte;
+    size_t lenPath = strlen(serverFile->path);
+    char tempPath[lenPath + 1];
+    strncpy(tempPath, serverFile->path, lenPath + 1);
     CSA(icl_hash_delete(hashPtrF, (void *) pathname, free, freeFileData) == -1, "removeFileServer: icl_hash_delete", EPERM, END_WRITE_LOCK)
+
+    //Aggiorno lo storage
+    storage->currentStorageFiles--;
+    storage->currentStorageBytes -= tempSizeBytes;
+    deleteDataQueueStringa(&(storage->FIFOtestaPtr), &(storage->FIFOcodaPtr), tempPath);
 
     UNLOCK(&globalMutex)
 
@@ -446,16 +507,7 @@ int removeClientInfo(icl_hash_t *hashPtrF, int clientFd)
     File *newFile;
     icl_hash_foreach(hashPtrF, k, entry, key, newFile)
     {
-            //--elimino la lock--
-            if(newFile->lockFd == clientFd)
-            {
-                setUnlockFile(newFile);
-            }
-            else
-            {
-                //elimino clientId dalla coda se è presente
-                deleteDataQueue(&(newFile->fdLock_TestaPtr), &(newFile->fdLock_CodaPtr), clientFd);
-            }
+        removeLock(newFile, clientFd);
 
             //elimino l'fd dalla lista dei fd che hanno fatto la open
             deleteSortedList(&(newFile->fdOpen_SLPtr), clientFd);
@@ -483,6 +535,15 @@ static void setUnlockFile(File *serverFile)
         serverFile->lockFd = pop(&(serverFile->fdLock_TestaPtr), &(serverFile->fdLock_CodaPtr));
 }
 
+//rimuove la lock di clientFd dalla lock in uso o dalla lista dei clientFd che sono in attesa di acquisire la lock
+void removeLock(File *serverFile, int clientFd)
+{
+    if(serverFile->lockFd == clientFd)
+        setUnlockFile(serverFile);
+    else
+        deleteDataQueue(&(serverFile->fdLock_TestaPtr), &(serverFile->fdLock_CodaPtr), clientFd); //elimino clientId dalla coda se è presente
+}
+
 //elimina tutti i dati compresi in serverFile (ed elimina lo stesso serverFile)
 void freeFileData(void *serverFile)
 {
@@ -497,9 +558,22 @@ void freeFileData(void *serverFile)
     if (serverFileF->fdOpen_SLPtr != NULL) {
         freeSortedList(&(serverFileF->fdOpen_SLPtr));
     }
+    if(serverFileF->fdLock_TestaPtr != NULL)
+    {
+        freeLista(&(serverFileF->fdLock_TestaPtr), &(serverFileF->fdLock_CodaPtr));
+    }
 
     free(serverFileF);
 }
+
+void freeStorage(ServerStorage *storage)
+{
+    freeQueueStringa(&(storage->FIFOtestaPtr), &(storage->FIFOcodaPtr));
+    icl_hash_destroy(storage->fileSystem, free, freeFileData); //da mettere controllo errore [controllare]
+
+    free(storage);
+}
+
 
 void stampaHash(icl_hash_t *hashPtr) {
     //k viene inizializzato a 0 in icl_hash_foreach
@@ -507,9 +581,9 @@ void stampaHash(icl_hash_t *hashPtr) {
     icl_entry_t *entry;
     char *key;
     File *newFile;
-    printf("---------------------stampaHash---------------------\n");
+    printf("=====================stampaHash=====================\n");
     icl_hash_foreach(hashPtr, k, entry, key, newFile) {
-            printf("---------------------%s---------------------\n", key);
+            printf("-------%s-------\n", key);
             printf("Chiave: %s\n", key);
             printf("Path: %s\n", newFile->path);
 //            printf("%d: cmp tra %s-%s\n", strcmp(key, newFile->path), key, newFile->path);
@@ -521,14 +595,15 @@ void stampaHash(icl_hash_t *hashPtr) {
             printf("Lock: %d\n", newFile->lockFd);
             stampa(newFile->fdLock_TestaPtr);
 
-            puts("");
-            RwLock_t tempFileLock = newFile->fileLock;
-            printf("num_readers_active: %d\n", tempFileLock.num_readers_active);
-            printf("num_writers_waiting: %d\n", tempFileLock.num_writers_waiting);
-            printf("num_readers_active: %d\n", tempFileLock.writer_active);
+            //LOCK
+//            puts("");
+//            RwLock_t tempFileLock = newFile->fileLock;
+//            printf("num_readers_active: %d\n", tempFileLock.num_readers_active);
+//            printf("num_writers_waiting: %d\n", tempFileLock.num_writers_waiting);
+//            printf("num_readers_active: %d\n", tempFileLock.writer_active);
 
 
-            printf("---------------------------------------------\n");
+            printf("--------------\n");
         }
-    printf("-------------------finestampaHash-------------------\n");
+    printf("=====================finestampaHash=====================\n");
 }

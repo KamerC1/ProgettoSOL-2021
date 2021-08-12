@@ -155,7 +155,7 @@ int readFile(const char *pathname, char **buf, size_t *size)
     WRITEN(FD_SOCK, temp, pathnameBytes, "readFile: writen()")
 
 
-    //ricezione esito dell'operazione del server
+    //ricezione esito dell'operazione per l'esecuzione di readFileServer
     int esitoAPI;
     READN(FD_SOCK, &esitoAPI, sizeof(int), "readFile: readn(FD_SOCK, &esitoAPI, sizeof(int))")
     CS(esitoAPI != API_SUCCESS, "Errore readFileServer", esitoAPI)
@@ -165,6 +165,10 @@ int readFile(const char *pathname, char **buf, size_t *size)
     *buf = malloc(sizeof(char) * (*size));
     CS(*buf == NULL, "readFile: malloc", errno)
     READN(FD_SOCK, *buf, *size, "readFile: READN(FD_SOCK, *buf, *size)")
+
+    //ricezione esito per l'invio del buffer
+    READN(FD_SOCK, &esitoAPI, sizeof(int), "readFile: readn(FD_SOCK, &esitoAPI, sizeof(int))")
+    CSA(esitoAPI != API_SUCCESS, "Errore readFileServer", esitoAPI, free(buf))
 
     PRINT("readFile eseguita con sueccesso")
 
@@ -227,9 +231,9 @@ int writeFile(const char *pathname, const char *dirname)
     }
     else
     {
-        int dirnameBytes = strlen(pathname) + 1; //+1 per '\0'
+        int dirnameBytes = strlen(dirname) + 1; //+1 per '\0'
         char dirnamTemp[dirnameBytes]; //writen non può prendere una costante [eliminare]
-        strncpy(temp, pathname, dirnameBytes);
+        strncpy(dirnamTemp, dirname, dirnameBytes);
         WRITEN(FD_SOCK, &dirnameBytes, sizeof(int), "writeFile: writen()")
         WRITEN(FD_SOCK, dirnamTemp, dirnameBytes, "writeFile: writen()")
     }
@@ -274,12 +278,13 @@ int appendToFile(const char *pathname, void *buf, size_t size, const char *dirna
     }
     else
     {
-        int dirnameBytes = strlen(pathname) + 1; //+1 per '\0'
+        int dirnameBytes = strlen(dirname) + 1; //+1 per '\0'
         char dirnamTemp[dirnameBytes]; //writen non può prendere una costante [eliminare]
-        strncpy(temp, pathname, dirnameBytes);
+        strncpy(dirnamTemp, dirname, dirnameBytes);
         WRITEN(FD_SOCK, &dirnameBytes, sizeof(int), "appendToFile: writen()")
         WRITEN(FD_SOCK, dirnamTemp, dirnameBytes, "appendToFile: writen()")
     }
+
 
 
     //ricezione esito dell'operazione del server
@@ -372,7 +377,6 @@ int unlockFile(const char *pathname)
     return 0;
 }
 
-
 int removeFile(const char *pathname)
 {
     //controllo argomento
@@ -396,6 +400,22 @@ int removeFile(const char *pathname)
     READN(FD_SOCK, &esitoAPI, sizeof(int), "removeFile: readn()")
     CS(esitoAPI != API_SUCCESS, "removeFile esito closeFile", esitoAPI)
     PRINT("removeFile eseguita con sueccesso")
+
+    return 0;
+}
+
+//Client manda una richiesta al server per eliminare tutte le sue informazioni memorizzate(fd e lock)
+int removeClientInfoAPI()
+{
+    //invia l'operazione della API
+    int operazione = API_REMOVE_CLIENT_INFO;
+    WRITEN(FD_SOCK, &operazione, sizeof(int), "removeClientInfoAPI: writen()")
+
+    //ricezione esito dell'operazione del server
+    int esitoAPI;
+    READN(FD_SOCK, &esitoAPI, sizeof(int), "removeClientInfoAPI: readn()")
+    CS(esitoAPI != API_SUCCESS, "removeClientInfoAPI esito closeFile", esitoAPI)
+    PRINT("removeClientInfoAPI eseguita con sueccesso")
 
     return 0;
 }
