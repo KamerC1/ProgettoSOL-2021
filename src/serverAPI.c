@@ -19,11 +19,6 @@ static void setLockFile(File *serverFile, int clientFd);
 static void setUnlockFile(File *serverFile);
 void removeLock(File *serverFile, int clientFd);
 
-//int main()
-//{
-//
-//}
-
 //da finire [controllare]
 int openFileServer(const char *pathname, int flags, ServerStorage *storage, int clientFd) {
     LOCK(&(storage->globalMutex))
@@ -31,7 +26,7 @@ int openFileServer(const char *pathname, int flags, ServerStorage *storage, int 
     writeLogFd_N_Date(storage->logFile, clientFd);
 
     //argomenti invalidi
-    CSA(checkPathname(pathname), "openFile: pathname sbaglito", EINVAL, ESOP("OpenFile", 0); UNLOCK(&(storage->globalMutex)))
+    CSA(checkPathname(pathname) == -1, "openFile: pathname sbaglito", EINVAL, ESOP("OpenFile", 0); UNLOCK(&(storage->globalMutex)))
 
     DIE(fprintf(storage->logFile, "Operazione: %s [flags: %d]\n", "openFile", flags))
     DIE(fprintf(storage->logFile, "Pathname: %s\n", pathname))
@@ -46,15 +41,19 @@ int openFileServer(const char *pathname, int flags, ServerStorage *storage, int 
     NodoQi_file *codaFilePtrF = NULL;
     switch (flags) {
         case O_OPEN:
-            CSA(serverFile == NULL, "O_OPEN: File non presente", EPERM, ESOP("OpenFile", 0); UNLOCK(&(storage->globalMutex)))
+            CSA(serverFile == NULL, "O_OPEN: File non presente", ENOENT, ESOP("OpenFile", 0); UNLOCK(&(storage->globalMutex)))
 
             START_WRITE_LOCK
 
-            //clientFd ha già aperto la lista
-            CSA(findSortedList(serverFile->fdOpen_SLPtr, clientFd) == 0, "O_OPEN: file già aperto dal client", EPERM, ESOP("OpenFile", 0); END_WRITE_LOCK)
-
-            insertSortedList(&(serverFile->fdOpen_SLPtr), clientFd);
-            serverFile->canWriteFile = 1;
+            //se clientFd ha già aperto la lista, non si fa niente
+            if(findSortedList(serverFile->fdOpen_SLPtr, clientFd) != 0)
+            {
+                insertSortedList(&(serverFile->fdOpen_SLPtr), clientFd);
+                serverFile->canWriteFile = 1;
+            } else
+            {
+                PRINT("File già aperto")
+            }
 
             END_WRITE_LOCK
 
@@ -88,12 +87,13 @@ int openFileServer(const char *pathname, int flags, ServerStorage *storage, int 
             break;
 
         case O_LOCK:
-            CSA(serverFile == NULL, "O_LOCK: File non presente", EPERM, ESOP("OpenFile", 0); UNLOCK(&(storage->globalMutex)))
+            CSA(serverFile == NULL, "O_LOCK: File non presente", ENOENT, ESOP("OpenFile", 0); UNLOCK(&(storage->globalMutex)))
 
             START_WRITE_LOCK
 
-            CSA(findSortedList(serverFile->fdOpen_SLPtr, clientFd) == 0, "O_LOCK: file già aperto dal client", EPERM, END_WRITE_LOCK)
-            insertSortedList(&(serverFile->fdOpen_SLPtr), clientFd);
+//            CSA(findSortedList(serverFile->fdOpen_SLPtr, clientFd) == 0, "O_LOCK: file già aperto dal client", EPERM, END_WRITE_LOCK)
+            if(findSortedList(serverFile->fdOpen_SLPtr, clientFd) != 0)
+                insertSortedList(&(serverFile->fdOpen_SLPtr), clientFd);
             setLockFile(serverFile, clientFd);
             serverFile->canWriteFile = 1;
 
@@ -146,7 +146,7 @@ int openFileServer(const char *pathname, int flags, ServerStorage *storage, int 
 
 //Funzione di supporto a openFIle: alloca e inizializzata una struttura File
 static File *createFile(const char *pathname, int clientFd) {
-    CSN(checkPathname(pathname), "createFile: pathname sbaglito", EINVAL)
+    CSN(checkPathname(pathname) == -1, "createFile: pathname sbaglito", EINVAL)
     CSN(clientFd < 0, "clientFd < 0", EINVAL)
 
 
@@ -182,6 +182,7 @@ static File *createFile(const char *pathname, int clientFd) {
 
 int readFileServer(const char *pathname, char **buf, size_t *size, ServerStorage *storage, int clientFd) {
     //in caso di errore, buf = NULL, size = 0
+    assert(*buf == NULL);
     *size = 0;
     *buf = NULL;
 
@@ -190,8 +191,8 @@ int readFileServer(const char *pathname, char **buf, size_t *size, ServerStorage
     writeLogFd_N_Date(storage->logFile, clientFd);
 
     //argomenti invalidi
-    CSA(checkPathname(pathname), "readFileServer: pathname sbaglito", EINVAL, ESOP("readFile", 0); UNLOCK(&(storage->globalMutex)))
-    DIE(fprintf(storage->logFile, "Operazione: %s\n", "writeFile"))
+    CSA(checkPathname(pathname) == -1, "readFileServer: pathname sbaglito", EINVAL, ESOP("readFile", 0); UNLOCK(&(storage->globalMutex)))
+    DIE(fprintf(storage->logFile, "Operazione: %s\n", "readFile"))
     DIE(fprintf(storage->logFile, "Pathname: %s\n", pathname))
 
 
@@ -201,7 +202,7 @@ int readFileServer(const char *pathname, char **buf, size_t *size, ServerStorage
 
     File *serverFile = icl_hash_find(hashPtrF, (void *) pathname);
     //il file non è presente nella hash table o non è stato aperto da clientFd
-    CSA(serverFile == NULL, "il file non è presente nella hash table", EPERM, ESOP("readFile", 0); UNLOCK(&(storage->globalMutex)))
+    CSA(serverFile == NULL, "il file non è presente nella hash table", ENOENT, ESOP("readFile", 0); UNLOCK(&(storage->globalMutex)))
 
     START_READ_LOCK
 
@@ -212,18 +213,90 @@ int readFileServer(const char *pathname, char **buf, size_t *size, ServerStorage
 
 
     *size = serverFile->sizeFileByte;
-    RETURN_NULL_SYSCALL(*buf, malloc(*size), "readFileServer: *buf = malloc(*size)")
-    memset(*buf, '\0', *size);
 
-    strncpy(*buf, serverFile->fileContent, serverFile->sizeFileByte);
+    if(serverFile->fileContent != NULL)
+    {
+        RETURN_NULL_SYSCALL(*buf, malloc(*size), "readFileServer: *buf = malloc(*size)")
+        memset(*buf, '\0', *size);
+        strncpy(*buf, serverFile->fileContent, serverFile->sizeFileByte);
+    }
 
     //readFile terminata con successo ==> non posso più fare la writeFile
     serverFile->canWriteFile = 0;
 
-    DIE(fprintf(storage->logFile, "Dim buffer inviato: %ld - Buffer: %s\n", *size, *buf))
+    if(*buf != NULL)
+    {
+        DIE(fprintf(storage->logFile, "Dim buffer inviato: %ld - Buffer: %s\n", *size, *buf))
+    }
+    else
+    {
+        DIE(fprintf(storage->logFile, "Dim buffer inviato: %ld - Buffer: %s\n", *size, "NULL"))
+    }
     ESOP("readFile", 1)
 
     END_READ_LOCK
+
+    return 0;
+}
+
+//crea un file nella directory dirname e vi copia il contenuto di "pathname"
+int copyFileToDirServer(const char *pathname, const char *dirname, ServerStorage *storage, int clientFd)
+{
+    LOCK(&(storage->globalMutex))
+
+    writeLogFd_N_Date(storage->logFile, clientFd);
+
+    //argomenti invalidi
+    CSA(checkPathname(pathname) == -1, "copyFileToDirServer: pathname sbaglito", EINVAL, ESOP("copyFileToDirServer", 0); UNLOCK(&(storage->globalMutex)))
+    CSA(dirname == NULL, "copyFileToDirServer: dirname == NULL", EINVAL, ESOP("copyFileToDirServer", 0); UNLOCK(&(storage->globalMutex)))
+    DIE(fprintf(storage->logFile, "Operazione: %s [dirname: %s]\n", "copyFileToDirServer", dirname))
+    DIE(fprintf(storage->logFile, "Pathname: %s\n", pathname))
+
+
+    CSA(storage == NULL, "readFileServer: storage == NULL", EINVAL, ESOP("copyFileToDirServer", 0); UNLOCK(&(storage->globalMutex)))
+    icl_hash_t *hashPtrF = storage->fileSystem;
+    assert(hashPtrF != NULL);
+
+    File *serverFile = icl_hash_find(hashPtrF, (void *) pathname);
+    //il file non è presente nella hash table o non è stato aperto da clientFd
+    CSA(serverFile == NULL, "il file non è presente nella hash table", ENOENT, ESOP("copyFileToDirServer", 0); UNLOCK(&(storage->globalMutex)))
+
+    START_WRITE_LOCK //non posso usare START_READ_LOCK perché uso "chdir"
+
+    IS_FILE_LOCKED(END_WRITE_LOCK)
+
+    CSA(findSortedList(serverFile->fdOpen_SLPtr, clientFd) == -1,
+        "il file non è stato aperto da clientFd", EPERM, ESOP("copyFileToDirServer", 0); END_WRITE_LOCK)
+
+
+    CSA(copyFileToDirHandler(serverFile, dirname), "copyFileToDirHandler", errno, ESOP("copyFileToDirServer", 0); END_WRITE_LOCK)
+
+    serverFile->canWriteFile = 0;
+    ESOP("copyFileToDirServer", 1)
+    END_WRITE_LOCK
+
+    return 0;
+}
+
+//funzione di supporto per copyFileToDirServer
+static int copyFileToDirHandler(File *serverFile, const char dirname[])
+{
+    //==Calcola il path dove lavora il processo==
+    char *processPath = getcwd(NULL, PATH_MAX);
+    CS(processPath == NULL, "getcwd", errno)
+    size_t pathLength = strlen(processPath); //il +1 è già compreso in MAX_PATH_LENGTH
+    REALLOC(processPath, pathLength + 1) //getcwd alloca "MAX_PATH_LENGTH" bytes
+
+    //cambio path [eliminare]
+    DIR *directory = opendir(dirname);
+    CSA(directory == NULL, "opendir(dirname): ", errno, free(processPath)) //+1 per '\0'
+
+    CSA(chdir(dirname) == -1, "chdir(dirname)", errno, free(processPath))
+    CSA(creatFileAndCopy(serverFile) == -1, "createReadNFiles", errno, free(processPath))
+    CSA(chdir(processPath) == -1, "chdir(processPath)", errno, free(processPath))
+
+    free(processPath);
+    CLOSEDIR(directory)
 
     return 0;
 }
@@ -294,19 +367,7 @@ int createReadNFiles(int N, ServerStorage *storage, int clientFd)
             }
             NfileCreated++;
 
-            //il file, anche se esiste già, viene sovrascritto perché il file nel server potrebbe essere cambiato
-            FILE *diskFile = fopen(basename(serverFile->path), "w");
-            CS(diskFile == NULL, "createReadNFiles: fopen()", errno)
-
-            //serverFile->fileContent è vuoto, allora il file creato riamen vuoto.
-            if (serverFile->fileContent != NULL) {
-                if (fputs(serverFile->fileContent, diskFile) == EOF) {
-                    puts("createReadNFiles: fputs");
-                    SYSCALL_NOTZERO(fclose(diskFile), "createReadNFiles: fclose() - termino processo")
-                }
-            }
-
-            SYSCALL_NOTZERO(fclose(diskFile), "createReadNFiles: fclose() - termino processo")
+            creatFileAndCopy(serverFile);
 
             serverFile->canWriteFile = 0;
 
@@ -316,13 +377,34 @@ int createReadNFiles(int N, ServerStorage *storage, int clientFd)
     return 0;
 }
 
-//manca buona parte della funzione - [controllare]
+//funzione di supporto per createReadNFiles copyFileToDirServer
+//crea un file e vi coppia il contenuto presente in "serverFile"
+//ritorna -1 in caso di errore, 0 altrimenti
+static int creatFileAndCopy(File *serverFile)
+{
+    //il file, anche se esiste già, viene sovrascritto perché il file nel server potrebbe essere cambiato
+    FILE *diskFile = fopen(basename(serverFile->path), "w");
+    CS(diskFile == NULL, "creatFileAndCopy: fopen()", errno)
+
+    //serverFile->fileContent è vuoto, allora il file creato riamen vuoto.
+    if (serverFile->fileContent != NULL) {
+        if (fputs(serverFile->fileContent, diskFile) == EOF) {
+            puts("creatFileAndCopy: fputs");
+            SYSCALL_NOTZERO(fclose(diskFile), "creatFileAndCopy: fclose() - termino processo")
+        }
+    }
+
+    SYSCALL_NOTZERO(fclose(diskFile), "creatFileAndCopy: fclose() - termino processo")
+
+    return 0;
+}
+
 int writeFileServer(const char *pathname, const char *dirname, ServerStorage *storage, int clientFd) {
     LOCK(&(storage->globalMutex))
     writeLogFd_N_Date(storage->logFile, clientFd);
 
     //Argomenti invalidi
-    CSA(checkPathname(pathname), "openFile: pathname sbaglito", EINVAL, ESOP("writeFile", 0); UNLOCK(&(storage->globalMutex)))
+    CSA(checkPathname(pathname) == -1, "openFile: pathname sbaglito", EINVAL, ESOP("writeFile", 0); UNLOCK(&(storage->globalMutex)))
 
     //Scrittura LOG
     if(dirname == NULL)
@@ -340,7 +422,7 @@ int writeFileServer(const char *pathname, const char *dirname, ServerStorage *st
     assert(hashPtrF != NULL);
 
     File *serverFile = icl_hash_find(hashPtrF, (void *) pathname);
-    CSA(serverFile == NULL, "writeFileServer: il file non è presente nella hash table", EPERM, ESOP("writeFile", 0); UNLOCK(&(storage->globalMutex)))
+    CSA(serverFile == NULL, "writeFileServer: il file non è presente nella hash table", ENOENT, ESOP("writeFile", 0); UNLOCK(&(storage->globalMutex)))
 
     START_WRITE_LOCK
 
@@ -383,6 +465,17 @@ int fillStructFile(File *serverFileF, ServerStorage *storage, const char *dirnam
     CSA(storage->maxStorageBytes < numCharFile+1, "fillStructFile: spazio non sufficiente", ENOMEM, FCLOSE(diskFile))
 
     rewind(diskFile); //riposiziono il puntatore - [eliminare]
+
+
+    //Il file è vuoto
+    if(numCharFile == 0)
+    {
+        serverFileF->sizeFileByte;
+        FCLOSE(diskFile)
+
+        return 0;
+    }
+
     serverFileF->sizeFileByte = numCharFile + 1; //memorizza anche il '\0' (perché anche esso occupa spazio)
 
     //lista che memorizza i file da copiare in dirname
@@ -422,7 +515,7 @@ int appendToFileServer(const char *pathname, char *buf, size_t size, const char 
     writeLogFd_N_Date(storage->logFile, clientFd);
 
     //Argomenti invalidi
-    CSA(checkPathname(pathname), "openFile: pathname sbaglito", EINVAL, ESOP("appendToFile", 0); UNLOCK(&(storage->globalMutex)))
+    CSA(checkPathname(pathname) == -1, "openFile: pathname sbaglito", EINVAL, ESOP("appendToFile", 0); UNLOCK(&(storage->globalMutex)))
     CSA(buf == NULL || strlen(buf) + 1 != size, "appendToFile: buf == NULL || strlen(buf) + 1", EINVAL, ESOP("appendToFile", 0); UNLOCK(&(storage->globalMutex))) //"size": numero byte di buf e non il numero di caratteri
 
 
@@ -445,7 +538,7 @@ int appendToFileServer(const char *pathname, char *buf, size_t size, const char 
     assert(hashPtrF != NULL);
 
     File *serverFile = icl_hash_find(hashPtrF, (void *) pathname);
-    CSA(serverFile == NULL, "il file non è presente nella hash table", EPERM, ESOP("appendToFile", 0); UNLOCK(&(storage->globalMutex)))
+    CSA(serverFile == NULL, "il file non è presente nella hash table", ENOENT, ESOP("appendToFile", 0); UNLOCK(&(storage->globalMutex)))
 
     START_WRITE_LOCK
 
@@ -508,7 +601,7 @@ int lockFileServer(const char *pathname, ServerStorage *storage, int clientFd)
 
     writeLogFd_N_Date(storage->logFile, clientFd);
 
-    CSA(checkPathname(pathname), "lockFileServer: pathname sbaglito", EINVAL, ESOP("lockFileServer", 0); UNLOCK(&(storage->globalMutex)))
+    CSA(checkPathname(pathname) == -1, "lockFileServer: pathname sbaglito", EINVAL, ESOP("lockFileServer", 0); UNLOCK(&(storage->globalMutex)))
 
     DIE(fprintf(storage->logFile, "Operazione: %s\n", "lockFileServer"))
     DIE(fprintf(storage->logFile, "Pathname: %s\n", pathname))
@@ -519,7 +612,7 @@ int lockFileServer(const char *pathname, ServerStorage *storage, int clientFd)
     assert(hashPtrF != NULL);
 
     File *serverFile = icl_hash_find(hashPtrF, (void *) pathname);
-    CSA(serverFile == NULL, "lockFileServer: file non presente nel server", EPERM, ESOP("lockFileServer", 0); UNLOCK(&(storage->globalMutex)))
+    CSA(serverFile == NULL, "lockFileServer: file non presente nel server", ENOENT, ESOP("lockFileServer", 0); UNLOCK(&(storage->globalMutex)))
 
     START_WRITE_LOCK
 
@@ -543,7 +636,7 @@ int unlockFileServer(const char *pathname, ServerStorage *storage, int clientFd)
 
     writeLogFd_N_Date(storage->logFile, clientFd);
 
-    CSA(checkPathname(pathname), "unlockFileServer: pathname sbaglito", EINVAL, ESOP("unlockFileServer", 0); UNLOCK(&(storage->globalMutex)))
+    CSA(checkPathname(pathname) == -1, "unlockFileServer: pathname sbaglito", EINVAL, ESOP("unlockFileServer", 0); UNLOCK(&(storage->globalMutex)))
 
     DIE(fprintf(storage->logFile, "Operazione: %s\n", "unlockFileServer"))
     DIE(fprintf(storage->logFile, "Pathname: %s\n", pathname))
@@ -553,7 +646,7 @@ int unlockFileServer(const char *pathname, ServerStorage *storage, int clientFd)
     assert(hashPtrF != NULL);
 
     File *serverFile = icl_hash_find(hashPtrF, (void *) pathname);
-    CSA(serverFile == NULL, "unlockFileServer: file non presente nel server", EPERM, ESOP("unlockFileServer", 0); UNLOCK(&(storage->globalMutex)))
+    CSA(serverFile == NULL, "unlockFileServer: file non presente nel server", ENOENT, ESOP("unlockFileServer", 0); UNLOCK(&(storage->globalMutex)))
 
     START_WRITE_LOCK
 
@@ -578,7 +671,7 @@ int closeFileServer(const char *pathname, ServerStorage *storage, int clientFd) 
 
     writeLogFd_N_Date(storage->logFile, clientFd);
 
-    CSA(checkPathname(pathname), "openFile: pathname sbaglito", EINVAL, ESOP("closeFileServer", 0); UNLOCK(&(storage->globalMutex)))
+    CSA(checkPathname(pathname) == -1, "openFile: pathname sbaglito", EINVAL, ESOP("closeFileServer", 0); UNLOCK(&(storage->globalMutex)))
 
     DIE(fprintf(storage->logFile, "Operazione: %s\n", "closeFileServer"))
     DIE(fprintf(storage->logFile, "Pathname: %s\n", pathname))
@@ -588,7 +681,7 @@ int closeFileServer(const char *pathname, ServerStorage *storage, int clientFd) 
     assert(hashPtrF != NULL);
 
     File *serverFile = icl_hash_find(hashPtrF, (void *) pathname);
-    CSA(serverFile == NULL, "ERRORE close: file non presente nel server", EPERM, ESOP("closeFileServer", 0); UNLOCK(&(storage->globalMutex)))
+    CSA(serverFile == NULL, "ERRORE close: file non presente nel server", ENOENT, ESOP("closeFileServer", 0); UNLOCK(&(storage->globalMutex)))
 
     START_WRITE_LOCK
 
@@ -611,7 +704,7 @@ int removeFileServer(const char *pathname, ServerStorage *storage, int clientFd)
 
     writeLogFd_N_Date(storage->logFile, clientFd);
 
-    CSA(checkPathname(pathname), "removeFileServer: pathname sbaglito", EINVAL, ESOP("removeFile", 0); UNLOCK(&(storage->globalMutex)))
+    CSA(checkPathname(pathname) == -1, "removeFileServer: pathname sbaglito", EINVAL, ESOP("removeFile", 0); UNLOCK(&(storage->globalMutex)))
 
     DIE(fprintf(storage->logFile, "Operazione: %s\n", "closeFileServer"))
     DIE(fprintf(storage->logFile, "Pathname: %s\n", pathname))
@@ -621,7 +714,7 @@ int removeFileServer(const char *pathname, ServerStorage *storage, int clientFd)
     assert(hashPtrF != NULL);
 
     File *serverFile = icl_hash_find(hashPtrF, (void *) pathname);
-    CSA(serverFile == NULL, "ERRORE removeFileServer: file non presente nel server", EPERM, ESOP("removeFile", 0); UNLOCK(&(storage->globalMutex)))
+    CSA(serverFile == NULL, "ERRORE removeFileServer: file non presente nel server", ENOENT, ESOP("removeFile", 0); UNLOCK(&(storage->globalMutex)))
 
     IS_FILE_LOCKED(UNLOCK(&(storage->globalMutex)))
 
@@ -647,6 +740,81 @@ int removeFileServer(const char *pathname, ServerStorage *storage, int clientFd)
 
     return 0;
 }
+
+//restituisce:
+// -1 in caso di errore
+// 0 se il file "pathname" non è presente in hashPtrF
+//1 se clientfd NON ha aperto il file "pathname"
+//2 se clientfd ha aperto il file "pathname"
+int isPathPresentServer(const char pathname[], ServerStorage *storage, int clientFd)
+{
+    CS(checkPathname(pathname) == -1, "isPathPresentServer: pathname sbaglito", EINVAL)
+
+    LOCK(&(storage->globalMutex)) //NON posso usare la lock locale perché File viene eliminato
+
+    CSA(storage == NULL, "isPathPresentServer: storage == NULL", EINVAL, UNLOCK(&(storage->globalMutex)))
+    icl_hash_t *hashPtrF = storage->fileSystem;
+    assert(hashPtrF != NULL);
+
+
+    File *serverFile = icl_hash_find(hashPtrF, (void *) pathname);
+    if(serverFile == NULL)
+    {
+        UNLOCK(&(storage->globalMutex))
+        return NOT_PRESENTE;
+    }
+    START_READ_LOCK
+
+    if(findSortedList(serverFile->fdOpen_SLPtr, clientFd) == -1)
+    {
+        END_READ_LOCK
+        return NOT_APERTO;
+    }
+    else
+    {
+        END_READ_LOCK
+        return APERTO;
+    }
+
+}
+
+//restituisce SizeFileByte, altrimenti -1 in caso di errore
+size_t getSizeFileByteServer(const char pathname[], ServerStorage *storage, int clientFd)
+{
+    LOCK(&(storage->globalMutex))
+
+    writeLogFd_N_Date(storage->logFile, clientFd);
+
+    //argomenti invalidi
+    CSA(checkPathname(pathname) == -1, "getSizeFileByte: pathname sbaglito", EINVAL, ESOP("getSizeFileByte", 0); UNLOCK(&(storage->globalMutex)))
+    DIE(fprintf(storage->logFile, "Operazione: %s\n", "getSize"))
+    DIE(fprintf(storage->logFile, "Pathname: %s\n", pathname))
+
+
+    CSA(storage == NULL, "getSizeFileByte: storage == NULL", EINVAL, ESOP("getSizeFileByte", 0); UNLOCK(&(storage->globalMutex)))
+    icl_hash_t *hashPtrF = storage->fileSystem;
+    assert(hashPtrF != NULL);
+
+    File *serverFile = icl_hash_find(hashPtrF, (void *) pathname);
+    //il file non è presente nella hash table o non è stato aperto da clientFd
+    CSA(serverFile == NULL, "il file non è presente nella hash table", ENOENT, ESOP("getSizeFileByte", 0); UNLOCK(&(storage->globalMutex)))
+
+    START_READ_LOCK
+
+    IS_FILE_LOCKED(END_READ_LOCK)
+
+    CSA(findSortedList(serverFile->fdOpen_SLPtr, clientFd) == -1,
+        "il file non è stato aperto da clientFd", EPERM, ESOP("getSizeFileByte", 0); END_READ_LOCK)
+
+    size_t sizeTemp = serverFile->sizeFileByte;
+
+    ESOP("getSizeFileByte", 1)
+
+    END_READ_LOCK
+
+    return sizeTemp;
+}
+
 
 //Rimuove il Fd e la lock del client quando questo chiude la connessione
 int removeClientInfo(ServerStorage *storage, int clientFd)

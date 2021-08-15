@@ -106,7 +106,7 @@ int closeConnection(const char *sockname)
 int openFile(const char* pathname, int flags)
 {
     //controllo argomento
-    CS(checkPathname(pathname), "openFile: checkPathname", EINVAL)
+    CS(checkPathname(pathname) == -1, "openFile: checkPathname", EINVAL)
     CS(flags != O_OPEN && flags != O_CREATE && flags != O_LOCK && flags != O_CREATE + O_LOCK, "openFile: flag sbagliata", EINVAL)
 
 
@@ -141,7 +141,7 @@ int readFile(const char *pathname, char **buf, size_t *size)
     *size = 0;
     *buf = NULL;
     //controllo argomento
-    CS(checkPathname(pathname), "readFile: checkPathname", EINVAL)
+    CS(checkPathname(pathname) == -1, "readFile: checkPathname", EINVAL)
 
     //invia l'operazione della API
     int operazione = API_READFILE;
@@ -162,18 +162,55 @@ int readFile(const char *pathname, char **buf, size_t *size)
 
     //memorizzo i dati in *buf e *size
     READN(FD_SOCK, size, sizeof(size_t), "readFile: readn(FD_SOCK, size, sizeof(size_t))")
-    *buf = malloc(sizeof(char) * (*size));
-    CS(*buf == NULL, "readFile: malloc", errno)
-    READN(FD_SOCK, *buf, *size, "readFile: READN(FD_SOCK, *buf, *size)")
+    if(*size > 0)
+    {
+        *buf = malloc(sizeof(char) * (*size));
+        CS(*buf == NULL, "readFile: malloc", errno)
+        READN(FD_SOCK, *buf, *size, "readFile: READN(FD_SOCK, *buf, *size)")
+    }
 
     //ricezione esito per l'invio del buffer
     READN(FD_SOCK, &esitoAPI, sizeof(int), "readFile: readn(FD_SOCK, &esitoAPI, sizeof(int))")
-    CSA(esitoAPI != API_SUCCESS, "Errore readFileServer", esitoAPI, free(buf))
+    CSA(esitoAPI != API_SUCCESS, "Errore readFileServer", esitoAPI, if(*buf != NULL) free(*buf))
 
     PRINT("readFile eseguita con sueccesso")
 
     return 0;
 }
+
+int copyFileToDir(const char *pathname, const char *dirname)
+{
+    //controllo argomento
+    CS(checkPathname(pathname) == -1, "writeFile: checkPathname", EINVAL)
+    CS(dirname == NULL, "writeFile: checkPathname", EINVAL)
+
+    //invia l'operazione della API
+    int operazione = API_COPY_FILE_TODIR;
+    WRITEN(FD_SOCK, &operazione, sizeof(int), "writeFile: writen()")
+
+    //Invia pathname
+    int pathnameBytes = strlen(pathname) + 1; //+1 per '\0'
+    char temp[pathnameBytes]; //writen non può prendere una costante [eliminare]
+    strncpy(temp, pathname, pathnameBytes);
+    WRITEN(FD_SOCK, &pathnameBytes, sizeof(int), "writeFile: writen()")
+    WRITEN(FD_SOCK, temp, pathnameBytes, "writeFile: writen()")
+
+    int dirnameBytes = strlen(dirname) + 1; //+1 per '\0'
+    char dirnamTemp[dirnameBytes]; //writen non può prendere una costante [eliminare]
+    strncpy(dirnamTemp, dirname, dirnameBytes);
+    WRITEN(FD_SOCK, &dirnameBytes, sizeof(int), "writeFile: writen()")
+    WRITEN(FD_SOCK, dirnamTemp, dirnameBytes, "writeFile: writen()")
+
+
+    //ricezione esito dell'operazione del server
+    int esitoAPI;
+    READN(FD_SOCK, &esitoAPI, sizeof(int), "writeFile: readn()")
+    CS(esitoAPI != API_SUCCESS, "Errore writeFile", esitoAPI)
+    PRINT("writeFile eseguita con sueccesso")
+
+    return 0;
+}
+
 
 //ritorna -1 anche se fallisce il server
 int readNFiles(int N, const char *dirname)
@@ -209,7 +246,7 @@ int readNFiles(int N, const char *dirname)
 int writeFile(const char *pathname, const char *dirname)
 {
     //controllo argomento
-    CS(checkPathname(pathname), "writeFile: checkPathname", EINVAL)
+    CS(checkPathname(pathname) == -1, "writeFile: checkPathname", EINVAL)
 
 
     //invia l'operazione della API
@@ -252,7 +289,7 @@ int writeFile(const char *pathname, const char *dirname)
 int appendToFile(const char *pathname, void *buf, size_t size, const char *dirname)
 {
     //controllo argomento
-    CS(checkPathname(pathname), "appendToFile: checkPathname", EINVAL)
+    CS(checkPathname(pathname) == -1, "appendToFile: checkPathname", EINVAL)
     CS(buf == NULL || strlen(buf) + 1 != size, "appendToFile: buf == NULL || strlen(buf) + 1", EINVAL) //"size": numero byte di buf e non il numero di caratteri
 
     //invia l'operazione della API
@@ -299,7 +336,7 @@ int appendToFile(const char *pathname, void *buf, size_t size, const char *dirna
 int closeFile(const char *pathname)
 {
     //controllo argomento
-    CS(checkPathname(pathname), "closeFile: checkPathname", EINVAL)
+    CS(checkPathname(pathname) == -1, "closeFile: checkPathname", EINVAL)
 
 
     //invia l'operazione della API
@@ -326,7 +363,7 @@ int closeFile(const char *pathname)
 int lockFile(const char *pathname)
 {
     //controllo argomento
-    CS(checkPathname(pathname), "lockFile: checkPathname", EINVAL)
+    CS(checkPathname(pathname) == -1, "lockFile: checkPathname", EINVAL)
 
 
     //invia l'operazione della API
@@ -353,7 +390,7 @@ int lockFile(const char *pathname)
 int unlockFile(const char *pathname)
 {
     //controllo argomento
-    CS(checkPathname(pathname), "unlockFile: checkPathname", EINVAL)
+    CS(checkPathname(pathname) == -1, "unlockFile: checkPathname", EINVAL)
 
 
     //invia l'operazione della API
@@ -380,7 +417,7 @@ int unlockFile(const char *pathname)
 int removeFile(const char *pathname)
 {
     //controllo argomento
-    CS(checkPathname(pathname), "removeFile: checkPathname", EINVAL)
+    CS(checkPathname(pathname) == -1, "removeFile: checkPathname", EINVAL)
 
 
     //invia l'operazione della API
@@ -403,6 +440,62 @@ int removeFile(const char *pathname)
 
     return 0;
 }
+
+//restituisce: -1 se il file "pathname" non è presente in hashPtrF
+//0 se clientfd NON ha aperto il file "pathname"
+//1 se clientfd ha aperto il file "pathname"
+int isPathPresent(const char *pathname)
+{
+    //controllo argomento
+    CS(checkPathname(pathname) == -1, "removeFile: checkPathname", EINVAL)
+
+
+    //invia l'operazione della API
+    int operazione = API_ISFILE_PRESENT;
+    WRITEN(FD_SOCK, &operazione, sizeof(int), "removeFile: writen()")
+
+    //Invia pathname
+    int pathnameBytes = strlen(pathname) + 1; //+1 per '\0'
+    char temp[pathnameBytes]; //writen non può prendere una costante [eliminare]
+    strncpy(temp, pathname, pathnameBytes);
+    WRITEN(FD_SOCK, &pathnameBytes, sizeof(int), "removeFile: writen()")
+    WRITEN(FD_SOCK, temp, pathnameBytes, "removeFile: writen()")
+
+
+    //ricezione esito dell'operazione del server
+    int esitoAPI;
+    READN(FD_SOCK, &esitoAPI, sizeof(int), "removeFile: readn()")
+
+    return esitoAPI;
+}
+
+
+size_t getSizeFileByte(const char *pathname)
+{
+    //controllo argomento
+    CS(checkPathname(pathname) == -1, "getSizeFileByte: checkPathname", EINVAL)
+
+
+    //invia l'operazione della API
+    int operazione = API_GET_FILE_SIZEBYTE;
+    WRITEN(FD_SOCK, &operazione, sizeof(int), "getSizeFileByte: writen()")
+
+    //Invia pathname
+    int pathnameBytes = strlen(pathname) + 1; //+1 per '\0'
+    char temp[pathnameBytes]; //writen non può prendere una costante [eliminare]
+    strncpy(temp, pathname, pathnameBytes);
+    WRITEN(FD_SOCK, &pathnameBytes, sizeof(int), "getSizeFileByte: writen()")
+    WRITEN(FD_SOCK, temp, pathnameBytes, "getSizeFileByte: writen()")
+
+
+    //ricezione esito dell'operazione del server
+    size_t esitoAPI;
+    READN(FD_SOCK, &esitoAPI, sizeof(size_t), "getSizeFileByte: readn()")
+
+    return esitoAPI;
+}
+
+
 
 //Client manda una richiesta al server per eliminare tutte le sue informazioni memorizzate(fd e lock)
 int removeClientInfoAPI()
