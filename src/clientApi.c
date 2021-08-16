@@ -1,68 +1,26 @@
 #include "../include/clientAPI.h"
+#include <stdbool.h>
 
-//int main(int argc, char *argv[])
-//{
-//    CS(argc < 3, "inserire argomenti", EINVAL)
-//
-//    //sceglie quali istruzioni eseguire
-//    int expression = 0;
-////    printf("expression: ");
-////    scanf("%d", &expression);
-//
-//
-//    if(expression == 0)
-//    {
-//        struct timespec abstime;
-//    abstime.tv_sec = time(NULL) + 10;
-//    SYSCALL(openConnection(argv[1], 1000, abstime), "Errore");
-//
-//    char *pathname = getRealPath(argv[2]);
-//    SYSCALL(openFile(pathname, O_CREATE), "Errore")
-//
-//    SYSCALL(closeConnection(SOCKNAME), "Errore")
-//
-//    }
-//
-////    struct timespec abstime;
-////    abstime.tv_sec = time(NULL) + 10;
-////    SYSCALL(openConnection(argv[1], 1000, abstime), "Errore");
-////
-////    char *pathname = getRealPath(argv[2]);
-////    SYSCALL(openFile(pathname, O_CREATE), "Errore")
-////
-////    SYSCALL(openFile(pathname, O_LOCK), "Errore")
-////    SYSCALL(writeFile(pathname, NULL), "Errore")
-////    SYSCALL(readNFiles(0, "../test/readN/"), "Errore")
-////    SYSCALL(appendToFile(pathname, "gatto", strlen("gatto")+1, NULL), "Errore")
-////
-////    char *buf;
-////    size_t size;
-////    SYSCALL(readFile(pathname, &buf, &size), "Errore")
-////
-////    printf("BUF: %s\n", buf);
-////    printf("size: %ld\n", size);
-//
-////    free(buf);
-//
-//    sleep(3);
-//
-////    SYSCALL(closeConnection(SOCKNAME), "Errore")
-//    return 0;
-//}
+bool EN_STDOUT = true; //indica se stampare se abilitare -p
+#define STAMPA_STDOUT(val) if(EN_STDOUT == true) {val;}
+#define ES_NEG if(EN_STDOUT == true) puts("Esito negativo");
+#define ES_POS if(EN_STDOUT == true) puts("Esito positivo");
 
 int openConnection(const char *sockname, int msec, const struct timespec abstime)
 {
+    STAMPA_STDOUT(puts("\nOperazione: openConnection"))
     if(sockname == NULL || strlen(sockname) >= MAX_BYTES_SOCKNAME || msec < 0)
     {
+        ES_NEG
         PRINT("openConnection: Argomenti invalidi")
         errno = EINVAL;
         return -1;
     }
-
+    STAMPA_STDOUT(printf("Sockname: %s\n", sockname))
 
     //Creazione socket - termina tutto il processo
     FD_SOCK = socket(AF_UNIX, SOCK_STREAM, 0);
-    CS(FD_SOCK == -1, "openConnection: socket()", errno)
+    CSA(FD_SOCK == -1, "openConnection: socket()", errno, ES_NEG)
 
     //Connect
     struct sockaddr_un sckAddr;
@@ -72,32 +30,38 @@ int openConnection(const char *sockname, int msec, const struct timespec abstime
 
     while(connect(FD_SOCK, (struct sockaddr *) &sckAddr, sizeof(sckAddr)) == -1)
     {
-        CS(errno != ENOENT, "openConnection: connect()", errno)
+        CSA(errno != ENOENT, "openConnection: connect()", errno, ES_NEG)
         if(errno == ENOENT)
         {
             printf("Impossibile connettersi al server. Riprovo tra %d millisecondi\n", msec);
         }
 
         time_t nowTime = time(NULL);
-        CS(nowTime > abstime.tv_sec, "openConnection: tempo assoluto oltrepassato", EAGAIN)
+        CSA(nowTime > abstime.tv_sec, "openConnection: tempo assoluto oltrepassato", EAGAIN, ES_NEG)
 
         usleep(1000 * msec); //faccio passare msec millisecondi
     }
     strncpy(SOCKNAME, sockname, MAX_BYTES_SOCKNAME);
+
+    ES_POS;
+
     return 0;
 }
 
 int closeConnection(const char *sockname)
 {
+    STAMPA_STDOUT(puts("\nOperazione: closeConnection"))
     if(sockname == NULL || strncmp(sockname, SOCKNAME, MAX_BYTES_SOCKNAME))
     {
+        ES_NEG
         PRINT("closeConnection: Argomento invalidi")
         errno = EINVAL;
         return -1;
     }
+    STAMPA_STDOUT(printf("Sockname: %s\n", sockname))
 
-    CS(close(FD_SOCK), "closeConnection: close()", errno)
-    printf("Conessione chiusa: %s\n", sockname);
+    CSA(close(FD_SOCK), "closeConnection: close()", errno, ES_NEG)
+    ES_POS
 
     return 0;
 }
@@ -105,10 +69,13 @@ int closeConnection(const char *sockname)
 //ritorna -1 anche se fallisce il server
 int openFile(const char* pathname, int flags)
 {
-    //controllo argomento
-    CS(checkPathname(pathname) == -1, "openFile: checkPathname", EINVAL)
-    CS(flags != O_OPEN && flags != O_CREATE && flags != O_LOCK && flags != O_CREATE + O_LOCK, "openFile: flag sbagliata", EINVAL)
+    STAMPA_STDOUT(puts("\nOperazione: openFile"))
 
+    //controllo argomento
+    CSA(checkPathname(pathname) == -1, "openFile: checkPathname", EINVAL, ES_NEG)
+    STAMPA_STDOUT(printf("File: %s\n", pathname))
+    CSA(flags != O_OPEN && flags != O_CREATE && flags != O_LOCK && flags != O_CREATE + O_LOCK, "openFile: flag sbagliata", EINVAL, ES_NEG)
+    STAMPA_STDOUT(printf("Flags: %d\n", flags))
 
     //invia l'operazione della API
     int operazione = API_OPENFILE;
@@ -128,8 +95,8 @@ int openFile(const char* pathname, int flags)
     //ricezione esito dell'operazione del server
     int esitoAPI;
     READN(FD_SOCK, &esitoAPI, sizeof(int), "Errore: readn()")
-    CS(esitoAPI != API_SUCCESS, "Errore esito openFile", esitoAPI)
-    PRINT("openFile eseguita con sueccesso")
+    CSA(esitoAPI != API_SUCCESS, "Errore esito openFile", esitoAPI, ES_POS)
+    ES_POS
 
     return 0;
 }
@@ -137,11 +104,14 @@ int openFile(const char* pathname, int flags)
 //ritorna -1 anche se fallisce il server
 int readFile(const char *pathname, char **buf, size_t *size)
 {
+    STAMPA_STDOUT(puts("\nOperazione: readFile"))
+
+
     //in caso di errore, buf = NULL, size = 0
     *size = 0;
     *buf = NULL;
     //controllo argomento
-    CS(checkPathname(pathname) == -1, "readFile: checkPathname", EINVAL)
+    CSA(checkPathname(pathname) == -1, "readFile: checkPathname", EINVAL, ES_NEG)
 
     //invia l'operazione della API
     int operazione = API_READFILE;
@@ -154,35 +124,49 @@ int readFile(const char *pathname, char **buf, size_t *size)
     WRITEN(FD_SOCK, &pathnameBytes, sizeof(int), "readFile: writen()")
     WRITEN(FD_SOCK, temp, pathnameBytes, "readFile: writen()")
 
+    STAMPA_STDOUT(printf("File: %s", pathname))
+
 
     //ricezione esito dell'operazione per l'esecuzione di readFileServer
     int esitoAPI;
     READN(FD_SOCK, &esitoAPI, sizeof(int), "readFile: readn(FD_SOCK, &esitoAPI, sizeof(int))")
-    CS(esitoAPI != API_SUCCESS, "Errore readFileServer", esitoAPI)
+    CSA(esitoAPI != API_SUCCESS, "Errore readFileServer", esitoAPI, ES_NEG)
 
     //memorizzo i dati in *buf e *size
     READN(FD_SOCK, size, sizeof(size_t), "readFile: readn(FD_SOCK, size, sizeof(size_t))")
     if(*size > 0)
     {
         *buf = malloc(sizeof(char) * (*size));
-        CS(*buf == NULL, "readFile: malloc", errno)
+        CSA(*buf == NULL, "readFile: malloc", errno, ES_NEG)
         READN(FD_SOCK, *buf, *size, "readFile: READN(FD_SOCK, *buf, *size)")
     }
 
     //ricezione esito per l'invio del buffer
     READN(FD_SOCK, &esitoAPI, sizeof(int), "readFile: readn(FD_SOCK, &esitoAPI, sizeof(int))")
-    CSA(esitoAPI != API_SUCCESS, "Errore readFileServer", esitoAPI, if(*buf != NULL) free(*buf))
-
+    CSA(esitoAPI != API_SUCCESS, "Errore readFileServer", esitoAPI, if(*buf != NULL) free(*buf); ES_NEG)
     PRINT("readFile eseguita con sueccesso")
+
+    //stampa bytes letti
+    long returnValueRead;
+    READN(FD_SOCK, &returnValueRead, sizeof(long), "writeFile: readn()")
+    STAMPA_STDOUT(printf("Bytes letti: %ld\n", returnValueRead))
+
+    ES_POS
 
     return 0;
 }
 
 int copyFileToDir(const char *pathname, const char *dirname)
 {
+    STAMPA_STDOUT(puts("\nOperazione: copyFileToDir"))
+
     //controllo argomento
-    CS(checkPathname(pathname) == -1, "writeFile: checkPathname", EINVAL)
-    CS(dirname == NULL, "writeFile: checkPathname", EINVAL)
+    CSA(checkPathname(pathname) == -1, "writeFile: checkPathname", EINVAL, ES_NEG)
+    CSA(dirname == NULL, "writeFile: checkPathname", EINVAL, ES_NEG)
+
+    STAMPA_STDOUT(printf("File: %s\n", pathname))
+    STAMPA_STDOUT(printf("Directory: %s\n", dirname))
+
 
     //invia l'operazione della API
     int operazione = API_COPY_FILE_TODIR;
@@ -205,19 +189,28 @@ int copyFileToDir(const char *pathname, const char *dirname)
     //ricezione esito dell'operazione del server
     int esitoAPI;
     READN(FD_SOCK, &esitoAPI, sizeof(int), "writeFile: readn()")
-    CS(esitoAPI != API_SUCCESS, "Errore writeFile", esitoAPI)
+    CSA(esitoAPI != API_SUCCESS, "Errore writeFile", esitoAPI, ES_NEG)
     PRINT("writeFile eseguita con sueccesso")
+
+    //stampa bytes letti
+    long returnValueCopy;
+    READN(FD_SOCK, &returnValueCopy, sizeof(long), "writeFile: readn()")
+    STAMPA_STDOUT(printf("Bytes letti: %ld\n", returnValueCopy))
+    ES_POS
 
     return 0;
 }
 
-
 //ritorna -1 anche se fallisce il server
 int readNFiles(int N, const char *dirname)
 {
-    //controllo argomento
-    CS(dirname == NULL, "readNFiles: dirname == NULL", EINVAL)
+    STAMPA_STDOUT(puts("\nOperazione: readNFiles"))
+    STAMPA_STDOUT(printf("N: %d\n", N))
 
+    //controllo argomento
+    CSA(dirname == NULL, "readNFiles: dirname == NULL", EINVAL, ES_NEG)
+
+    STAMPA_STDOUT(printf("Directory: %s\n", dirname))
 
     //invia l'operazione della API
     int operazione = API_READNFILES;
@@ -236,8 +229,20 @@ int readNFiles(int N, const char *dirname)
     //ricezione esito dell'operazione del server
     int esitoAPI;
     READN(FD_SOCK, &esitoAPI, sizeof(int), "readNFiles: readn()")
-    CS(esitoAPI != API_SUCCESS, "Errore readNFiles", esitoAPI)
+    CSA(esitoAPI != API_SUCCESS, "Errore readNFiles", esitoAPI, ES_NEG)
     PRINT("readNFiles eseguita con sueccesso")
+
+    //stampa numero di bytes letti
+    unsigned long long int bytesLetti;
+    READN(FD_SOCK, &bytesLetti, sizeof(unsigned long long int), "writeFile: readn()")
+    STAMPA_STDOUT(printf("Bytes letti: %lld\n", bytesLetti))
+
+    //stampa numero file letti
+    int returnValueRead;
+    READN(FD_SOCK, &returnValueRead, sizeof(int), "writeFile: readn()")
+    STAMPA_STDOUT(printf("file letti: %d\n", returnValueRead))
+
+    ES_POS
 
     return 0;
 }
@@ -245,8 +250,10 @@ int readNFiles(int N, const char *dirname)
 //ritorna -1 anche se fallisce il server
 int writeFile(const char *pathname, const char *dirname)
 {
+    STAMPA_STDOUT(puts("\nOperazione: writeFile"))
+
     //controllo argomento
-    CS(checkPathname(pathname) == -1, "writeFile: checkPathname", EINVAL)
+    CSA(checkPathname(pathname) == -1, "writeFile: checkPathname", EINVAL, ES_NEG)
 
 
     //invia l'operazione della API
@@ -276,13 +283,23 @@ int writeFile(const char *pathname, const char *dirname)
     }
 
 
+    //stampa -p
+    STAMPA_STDOUT(printf("File: %s\n", pathname))
+    if(dirname != NULL)
+        STAMPA_STDOUT(printf("Dirname: %s\n", dirname))
 
     //ricezione esito dell'operazione del server
     int esitoAPI;
     READN(FD_SOCK, &esitoAPI, sizeof(int), "writeFile: readn()")
-    CS(esitoAPI != API_SUCCESS, "Errore writeFile", esitoAPI)
+    CSA(esitoAPI != API_SUCCESS, "Errore writeFile", esitoAPI, ES_NEG)
     PRINT("writeFile eseguita con sueccesso")
 
+    //stampa bytes
+    long returnValueWrite;
+    READN(FD_SOCK, &returnValueWrite, sizeof(long), "writeFile: readn()")
+    STAMPA_STDOUT(printf("Bytes scritti: %ld\n", returnValueWrite))
+
+    ES_POS
     return 0;
 }
 
@@ -335,8 +352,12 @@ int appendToFile(const char *pathname, void *buf, size_t size, const char *dirna
 
 int closeFile(const char *pathname)
 {
+    STAMPA_STDOUT(puts("\nOperazione: closeFile"))
+
+
     //controllo argomento
-    CS(checkPathname(pathname) == -1, "closeFile: checkPathname", EINVAL)
+    CSA(checkPathname(pathname) == -1, "closeFile: checkPathname", EINVAL, ES_NEG)
+    STAMPA_STDOUT(printf("File: %s\n", pathname))
 
 
     //invia l'operazione della API
@@ -354,16 +375,19 @@ int closeFile(const char *pathname)
     //ricezione esito dell'operazione del server
     int esitoAPI;
     READN(FD_SOCK, &esitoAPI, sizeof(int), "Errore: readn()")
-    CS(esitoAPI != API_SUCCESS, "Errore esito closeFile", esitoAPI)
-    PRINT("closeFile eseguita con sueccesso")
+    CSA(esitoAPI != API_SUCCESS, "Errore esito closeFile", esitoAPI, ES_NEG)
+    ES_POS
 
     return 0;
 }
 
 int lockFile(const char *pathname)
 {
+    STAMPA_STDOUT(puts("\nOperazione: lockFile"))
+
     //controllo argomento
-    CS(checkPathname(pathname) == -1, "lockFile: checkPathname", EINVAL)
+    CSA(checkPathname(pathname) == -1, "lockFile: checkPathname", EINVAL, ES_NEG)
+    STAMPA_STDOUT(printf("File: %s\n", pathname))
 
 
     //invia l'operazione della API
@@ -381,16 +405,18 @@ int lockFile(const char *pathname)
     //ricezione esito dell'operazione del server
     int esitoAPI;
     READN(FD_SOCK, &esitoAPI, sizeof(int), "lockFile: readn()")
-    CS(esitoAPI != API_SUCCESS, "Errore esito closeFile", esitoAPI)
-    PRINT("lockFile eseguita con sueccesso")
-
+    CSA(esitoAPI != API_SUCCESS, "Errore esito closeFile", esitoAPI, ES_NEG)
+    ES_POS
     return 0;
 }
 
 int unlockFile(const char *pathname)
 {
+    STAMPA_STDOUT(puts("\nOperazione: unlockFile"))
+
     //controllo argomento
-    CS(checkPathname(pathname) == -1, "unlockFile: checkPathname", EINVAL)
+    CSA(checkPathname(pathname) == -1, "unlockFile: checkPathname", EINVAL, ES_NEG)
+    STAMPA_STDOUT(printf("File: %s\n", pathname))
 
 
     //invia l'operazione della API
@@ -408,16 +434,18 @@ int unlockFile(const char *pathname)
     //ricezione esito dell'operazione del server
     int esitoAPI;
     READN(FD_SOCK, &esitoAPI, sizeof(int), "unlockFile: readn()")
-    CS(esitoAPI != API_SUCCESS, "Errore esito unlockFile", esitoAPI)
-    PRINT("unlockFile eseguita con sueccesso")
-
+    CSA(esitoAPI != API_SUCCESS, "Errore esito unlockFile", esitoAPI, ES_NEG)
+    ES_POS
     return 0;
 }
 
 int removeFile(const char *pathname)
 {
+    STAMPA_STDOUT(puts("\nOperazione: removeFile"))
+
     //controllo argomento
-    CS(checkPathname(pathname) == -1, "removeFile: checkPathname", EINVAL)
+    CSA(checkPathname(pathname) == -1, "removeFile: checkPathname", EINVAL, ES_NEG)
+    STAMPA_STDOUT(printf("File: %s\n", pathname))
 
 
     //invia l'operazione della API
@@ -435,9 +463,8 @@ int removeFile(const char *pathname)
     //ricezione esito dell'operazione del server
     int esitoAPI;
     READN(FD_SOCK, &esitoAPI, sizeof(int), "removeFile: readn()")
-    CS(esitoAPI != API_SUCCESS, "removeFile esito closeFile", esitoAPI)
-    PRINT("removeFile eseguita con sueccesso")
-
+    CSA(esitoAPI != API_SUCCESS, "removeFile esito closeFile", esitoAPI, ES_NEG)
+    ES_POS
     return 0;
 }
 
@@ -494,8 +521,6 @@ size_t getSizeFileByte(const char *pathname)
 
     return esitoAPI;
 }
-
-
 
 //Client manda una richiesta al server per eliminare tutte le sue informazioni memorizzate(fd e lock)
 int removeClientInfoAPI()

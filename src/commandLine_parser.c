@@ -8,20 +8,24 @@
 
 //ritorna 0 in caso di successo, altrimenti -1.
 //*sockName_f: memorizza il socket presente in -f (se presente)
-int cmlParsing(NodoCLPtr *testaPtr, NodoCLPtr *codaPtr, int argc, char *argv[], char **sockName_f)
+//isPresent_p è true se è stata passata l'opzione -p
+int cmlParsing(NodoCLPtr *testaPtr, NodoCLPtr *codaPtr, int argc, char *argv[], char **sockName_f, bool *isPresent_p, long *time)
 {
     //memorizza il socket presente in -f
 
     //controllano se l'opzione: h,f,p sono presenti più volte.
     bool isPresent_h = false;
     bool isPresent_f = false;
-    bool isPresent_p = false;
+    bool isPresent_t = false;
+    *isPresent_p = false;
 
     //controlla se ci sono presenti opzioni che richiedono -f
     bool need_f = false;
 
+    *time = 0; //se -t non è specificato, *time è 0 di default
+
     int opt;
-    while ((opt = getopt(argc, argv, ":hf:w:W:D:r:R::d:l:u:c:p")) != -1)
+    while ((opt = getopt(argc, argv, ":hf:w:W:D:r:R::d:l:u:c:pt:")) != -1)
     {
         switch (opt)
         {
@@ -36,7 +40,7 @@ int cmlParsing(NodoCLPtr *testaPtr, NodoCLPtr *codaPtr, int argc, char *argv[], 
             case 'f':
                 if(isPresent_f == false)
                 {
-                    pushCoda(testaPtr, codaPtr, opt, optarg);
+//                    pushCoda(testaPtr, codaPtr, opt, optarg);
                     isPresent_f = true;
 
                     size_t optArgLen = sizeof(optarg);
@@ -85,8 +89,15 @@ int cmlParsing(NodoCLPtr *testaPtr, NodoCLPtr *codaPtr, int argc, char *argv[], 
                     puts("-d non segue -r o -R");
                 break;
             case 't':
-                need_f = true;
-                pushCoda(testaPtr, codaPtr, opt, optarg);
+                if(isPresent_t == false)
+                {
+                    need_f = true;
+                    *time = stringToLong(optarg);
+                    if(*time < 0) //in caso di errore, o se il numero è negativo, viene impostato a 0
+                        *time = 0;
+                    isPresent_t = true;
+                }
+                else PRINT("-p già presente - ignorato")
                 break;
             case 'l':
                 need_f = true;
@@ -101,13 +112,13 @@ int cmlParsing(NodoCLPtr *testaPtr, NodoCLPtr *codaPtr, int argc, char *argv[], 
                 pushCoda(testaPtr, codaPtr, opt, optarg);
                 break;
             case 'p':
-                if(isPresent_p == false)
+                if(*isPresent_p == false)
                 {
                     need_f = true;
-                    pushCoda(testaPtr, codaPtr, opt, optarg);
-                    isPresent_p = true;
+//                    pushCoda(testaPtr, codaPtr, opt, optarg); //Non c'è bisogno di inserirlo nella coda
+                    *isPresent_p = true;
                 }
-                else PRINT("-p già prsente - ignorato")
+                else PRINT("-p già presente - ignorato")
                 break;
             case ':': {
                 printf("l'opzione '-%c' richiede un argomento\n", optopt);
@@ -121,7 +132,7 @@ int cmlParsing(NodoCLPtr *testaPtr, NodoCLPtr *codaPtr, int argc, char *argv[], 
         }
     }
     //Può capitare che la lista sia vuota perché nessun argomento è stato accettato
-    if(testaPtr == NULL)
+    if(*testaPtr == NULL && *isPresent_p == false)
     {
         puts("Argomenti non accettati");
 
@@ -277,4 +288,23 @@ void freeCoda(NodoCLPtr *lPtrF, NodoCLPtr *codaPtr)
     {
         *codaPtr = NULL;
     }
+}
+
+//converte una stringa in un long
+long stringToLong(const char* s)
+{
+    char* e = NULL;
+    errno = 0;
+    long val = strtol(s, &e, 0);
+    if (e != NULL && *e == (char)0)
+    {
+        if((val == LONG_MAX || val == LONG_MIN) && errno == ERANGE)
+        {
+            perror("Numero troppo grande o piccolo: ");
+            return -1;
+        }
+
+        return val;
+    }
+    return -1;
 }

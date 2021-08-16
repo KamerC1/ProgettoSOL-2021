@@ -180,7 +180,8 @@ static File *createFile(const char *pathname, int clientFd) {
     return serverFile;
 }
 
-int readFileServer(const char *pathname, char **buf, size_t *size, ServerStorage *storage, int clientFd) {
+//restituisce -1 in caso di errore, altrimenti il numero di byte letti
+long readFileServer(const char *pathname, char **buf, size_t *size, ServerStorage *storage, int clientFd) {
     //in caso di errore, buf = NULL, size = 0
     assert(*buf == NULL);
     *size = 0;
@@ -236,11 +237,11 @@ int readFileServer(const char *pathname, char **buf, size_t *size, ServerStorage
 
     END_READ_LOCK
 
-    return 0;
+    return *size;
 }
 
 //crea un file nella directory dirname e vi copia il contenuto di "pathname"
-int copyFileToDirServer(const char *pathname, const char *dirname, ServerStorage *storage, int clientFd)
+long copyFileToDirServer(const char *pathname, const char *dirname, ServerStorage *storage, int clientFd)
 {
     LOCK(&(storage->globalMutex))
 
@@ -273,9 +274,11 @@ int copyFileToDirServer(const char *pathname, const char *dirname, ServerStorage
 
     serverFile->canWriteFile = 0;
     ESOP("copyFileToDirServer", 1)
+
+    long returnValue = serverFile->sizeFileByte;
     END_WRITE_LOCK
 
-    return 0;
+    return returnValue;
 }
 
 //funzione di supporto per copyFileToDirServer
@@ -301,8 +304,9 @@ static int copyFileToDirHandler(File *serverFile, const char dirname[])
     return 0;
 }
 
-int readNFilesServer(int N, const char *dirname, ServerStorage *storage, int clientFd)
+int readNFilesServer(int N, const char *dirname, ServerStorage *storage, int clientFd, unsigned long long int *bytesLetti)
 {
+    *bytesLetti = 0;
     LOCK(&(storage->globalMutex))
 
     writeLogFd_N_Date(storage->logFile, clientFd);
@@ -332,7 +336,8 @@ int readNFilesServer(int N, const char *dirname, ServerStorage *storage, int cli
     CSA(directory == NULL, "directory = opendir(dirname): ", errno, free(processPath); ESOP("readNFiles", 0); UNLOCK(&(storage->globalMutex))) //+1 per '\0'
 
     CSA(chdir(dirname) == -1, "readNFiles: chdir(dirname)", errno, free(processPath); UNLOCK(&(storage->globalMutex)); CLOSEDIR(directory))
-    CSA(createReadNFiles(N, storage, clientFd) == -1, "readNFiles: createReadNFiles", errno, free(processPath); UNLOCK(&(storage->globalMutex)); ESOP("readNFiles", 0); CLOSEDIR(directory))
+    int returnValue = createReadNFiles(N, storage, clientFd, bytesLetti);
+    CSA(returnValue == -1, "readNFiles: createReadNFiles", errno, free(processPath); UNLOCK(&(storage->globalMutex)); ESOP("readNFiles", 0); CLOSEDIR(directory))
     CSA(chdir(processPath) == -1, "readNFiles: chdir(processPath)", errno, free(processPath); UNLOCK(&(storage->globalMutex)); ESOP("readNFiles", 0); CLOSEDIR(directory))
 
     free(processPath);
@@ -342,11 +347,11 @@ int readNFilesServer(int N, const char *dirname, ServerStorage *storage, int cli
     UNLOCK(&(storage->globalMutex))
     //canWrite viene aggiornato in createReadNFiles
 
-    return 0;
+    return returnValue;
 }
 
 //funzione di supporto a readNFiles. Crea i file letti dal server e ne copia il contenuto
-int createReadNFiles(int N, ServerStorage *storage, int clientFd)
+int createReadNFiles(int N, ServerStorage *storage, int clientFd, unsigned long long int *bytesLetti)
 {
     CS(storage == NULL, "readNFileServer: storage == NULL", EINVAL)
     icl_hash_t *hashPtrF = storage->fileSystem;
@@ -363,18 +368,21 @@ int createReadNFiles(int N, ServerStorage *storage, int clientFd)
     icl_hash_foreach(hashPtrF, k, entry, key, serverFile)
     {
             if (NfileCreated >= N) {
-                return 0;
+                return NfileCreated;
             }
-            NfileCreated++;
 
-            creatFileAndCopy(serverFile);
+            if(creatFileAndCopy(serverFile) == 0)
+            {
+                NfileCreated++;
+                *bytesLetti += serverFile->sizeFileByte;
+            }
 
             serverFile->canWriteFile = 0;
 
         DIE(fprintf(storage->logFile, "%s\n", serverFile->path))
     }
 
-    return 0;
+    return NfileCreated;
 }
 
 //funzione di supporto per createReadNFiles copyFileToDirServer
@@ -399,7 +407,8 @@ static int creatFileAndCopy(File *serverFile)
     return 0;
 }
 
-int writeFileServer(const char *pathname, const char *dirname, ServerStorage *storage, int clientFd) {
+//restituisce -1 in caso di errore, altrimenti il numero di byte scritti
+long writeFileServer(const char *pathname, const char *dirname, ServerStorage *storage, int clientFd) {
     LOCK(&(storage->globalMutex))
     writeLogFd_N_Date(storage->logFile, clientFd);
 
@@ -441,9 +450,10 @@ int writeFileServer(const char *pathname, const char *dirname, ServerStorage *st
     DIE(fprintf(storage->logFile, "Numero byte scritti: %ld\n", serverFile->sizeFileByte))
     ESOP("writeFile", 1)
 
+    long returnValue = serverFile->sizeFileByte; //garantisce la mutua esclusione
     END_WRITE_LOCK
 
-    return 0;
+    return returnValue;
 }
 
 //riempe i campi dello struct "File" a partire da file in disk con pathname: "pathname". Restituisce il dato "File"
