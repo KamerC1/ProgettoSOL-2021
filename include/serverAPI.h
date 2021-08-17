@@ -2,11 +2,12 @@
 #define serverAPI_h
 
 #include <stdbool.h>
-#include "../strutture_dati/sortedList/sortedList.c"
-#include "../strutture_dati/queueInt/queue.c"
-#include "../strutture_dati/hash/icl_hash.c"
+#include "../strutture_dati/sortedList/sortedList.h"
+#include "../strutture_dati/queueInt/queue.h"
+#include "../strutture_dati/queueChar/queueChar.h"
+#include "../strutture_dati/hash/icl_hash.h"
 #include "../utils/flagsAPI.h"
-#include "../strutture_dati/readers_writers_lock/readers_writers_lock.c"
+#include "../strutture_dati/readers_writers_lock/readers_writers_lock.h"
 
 
 
@@ -26,8 +27,32 @@ struct file {
 };
 typedef struct file File;
 
+struct serverStorage
+{
+    size_t maxStorageBytes; //massimo numero di bytes usabili nel server
+    size_t maxStorageFiles; //massimo numero di files che server può contenere
+    size_t currentStorageBytes; //numero di bytes attualmente usati nel server
+    size_t currentStorageFiles; //numero di files attualmente memorizzati nel server
+
+    short fileReplacementAlg; //0->FIFO
+    //Struttura dati per gestire la politica di rimozione di tipo FIFO (contiene i file attualmente aperti)
+    NodoQi_string *FIFOtestaPtr;
+    NodoQi_string *FIFOcodaPtr;
+
+    pthread_mutex_t globalMutex;
+
+    icl_hash_t *fileSystem; //tabella hash che memorizza l'insieme dei file
+
+    FILE *logFile; //file di log dove scrivere le operazioni dello storage
+
+
+    size_t maxFileStored; //massimo numero di file memorizzati
+    size_t maxByteStored; //massimo numero di byte memorizzati
+    size_t numVictims;  //numero di vittime dall'algoritmo di rimpiazzamento
+};
+typedef struct serverStorage ServerStorage;
+
 //mutex globale per gestire la tabella hash del file system
-static pthread_mutex_t globalMutex = PTHREAD_MUTEX_INITIALIZER;
 
 //Ritorna errore se chi chiama la funzione dell'API NON possiede la lock (ins rappresenta un insieme di istruzioni)
 #define IS_FILE_LOCKED(ins)                                         \
@@ -40,23 +65,10 @@ if(serverFile->lockFd != -1 && serverFile->lockFd != clientFd)      \
 }                                                                   \
 
 
-//In caso di errore, elimina la lock (se presente)
-#define REMOVE_FILELOCK                                                                             \
-if(serverFile->lockFd == clientFd)                                                                  \
-    setUnlockFile(serverFile);                                                                      \
-else                                                                                                \
-    deleteDataQueue(&(serverFile->fdLock_TestaPtr), &(serverFile->fdLock_CodaPtr), clientFd);       \
-
-
-//In caso di errore, elimina l'fd dalla lista dei fd aperti
-#define REMOVE_FDOPEN deleteSortedList(&(serverFile->fdOpen_SLPtr), clientFd);
-
-#define CLEAN_FILE REMOVE_FILELOCK REMOVE_FDOPEN
-
 //Gestione lock per la API in "lettura"
 #define START_READ_LOCK                             \
     LOCK(&(serverFile->fileLock.mutexFile))         \
-    UNLOCK(&globalMutex)                            \
+    UNLOCK(&(storage->globalMutex))                 \
     rwLock_startReading(&serverFile->fileLock);     \
     UNLOCK(&(serverFile->fileLock.mutexFile))       \
 
@@ -68,7 +80,7 @@ else                                                                            
 //Gestione lock per la API in "scrittura"
 #define START_WRITE_LOCK                            \
     LOCK(&(serverFile->fileLock.mutexFile))         \
-    UNLOCK(&globalMutex)                            \
+    UNLOCK(&(storage->globalMutex))                 \
     rwLock_startWriting(&serverFile->fileLock);     \
     UNLOCK(&(serverFile->fileLock.mutexFile))       \
 
@@ -83,19 +95,29 @@ else                                                                            
 
 
 //Funzioni che implementano le API
-int writeFileServer(const char *pathname, const char *dirname, icl_hash_t *hashPtrF, int clientFd);
-int openFileServer(const char *pathname, int flags, icl_hash_t *hashPtrF, int clientFd);
-int closeFileServer(const char *pathname, icl_hash_t *hashPtrF, int clientFd);
-int appendToFileServer(const char *pathname, char *buf, size_t size, const char *dirname, icl_hash_t *hashPtrF, int clientFd);
-int readFileServer(const char *pathname, char **buf, size_t *size, icl_hash_t *hashPtrF, int clientFd);
-int readNFilesServer(int N, const char *dirname, icl_hash_t *hashPtrF);
-int removeFileServer(const char *pathname, icl_hash_t *hashPtrF, int clientFd);
+long writeFileServer(const char *pathname, const char *dirname, ServerStorage *storage, int clientFd);
+int openFileServer(const char *pathname, int flags, ServerStorage *storage, int clientFd);
+int closeFileServer(const char *pathname, ServerStorage *storage, int clientFd);
+int appendToFileServer(const char *pathname, char *buf, size_t size, const char *dirname, ServerStorage *storage, int clientFd);
+long readFileServer(const char *pathname, char **buf, size_t *size, ServerStorage *storage, int clientFd);
+long copyFileToDirServer(const char *pathname, const char *dirname, ServerStorage *storage, int clientFd);
+int readNFilesServer(int N, const char *dirname, ServerStorage *storage, int clientFd, unsigned long long int *bytesLetti);
+int removeFileServer(const char *pathname, ServerStorage *storage, int clientFd);
+int lockFileServer(const char *pathname, ServerStorage *storage, int clientFd);
+int unlockFileServer(const char *pathname, ServerStorage *storage, int clientFd);
+size_t getSizeFileByteServer(const char pathname[], ServerStorage *storage, int clientFd);
 
-int fillStructFile(File *serverFileF);
+int fillStructFile(File *serverFileF, ServerStorage *storage, const char *dirname);
 static File *createFile(const char *pathname, int clientFd);
 void stampaHash(icl_hash_t *hashPtr);
 void freeFileData(void *serverFile);
-int createReadNFiles(int N, icl_hash_t *hashPtrF);
-int checkPathname(const char *pathname);
+static int copyFileToDirHandler(File *serverFile, const char dirname[]);
+int createReadNFiles(int N, ServerStorage *storage, int clientFd, unsigned long long int *bytesLetti);
+static int creatFileAndCopy(File *serverFile);
+int gestioneApi_removeClientInfoAPI(int fdAcceptF);
+int removeClientInfo(ServerStorage *storage, int clientFd);
+void freeStorage(ServerStorage *storage);
+int isPathPresentServer(const char pathname[], ServerStorage *storage, int clientFd);
+
 
 #endif

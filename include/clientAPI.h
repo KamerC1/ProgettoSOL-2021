@@ -25,5 +25,8 @@ int lockFile(const char *pathname);
 int unlockFile(const char *pathname);
 int closeFile(const char *pathname);
 int removeFile(const char *pathname);
+int isPathPresent(const char *pathname);
+size_t getSizeFileByte(const char *pathname);
+int removeClientInfoAPI();
 
 #endif
