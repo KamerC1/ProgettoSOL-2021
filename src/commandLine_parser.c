@@ -43,9 +43,11 @@ int cmlParsing(NodoCLPtr *testaPtr, NodoCLPtr *codaPtr, int argc, char *argv[], 
 //                    pushCoda(testaPtr, codaPtr, opt, optarg);
                     isPresent_f = true;
 
-                    size_t optArgLen = sizeof(optarg);
-                    *sockName_f = malloc(optArgLen + 1);
-                    strncpy(*sockName_f, optarg, optArgLen + 1);
+                    size_t optArgLen = strlen(optarg);
+                    *sockName_f = malloc(sizeof(char) * (optArgLen + 1));
+                    SYSCALL(*sockName_f == NULL, "cmlParsing: malloc")
+                    memset(*sockName_f, '\0', optArgLen + 1);
+                    strncpy(*sockName_f, optarg, optArgLen);
                 }
                 else PRINT("-f già prsente - ignorato")
                 break;
@@ -132,7 +134,7 @@ int cmlParsing(NodoCLPtr *testaPtr, NodoCLPtr *codaPtr, int argc, char *argv[], 
         }
     }
     //Può capitare che la lista sia vuota perché nessun argomento è stato accettato
-    if(*testaPtr == NULL && *isPresent_p == false)
+    if(*testaPtr == NULL && *isPresent_p == false && isPresent_f == false)
     {
         puts("Argomenti non accettati");
 
