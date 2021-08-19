@@ -19,6 +19,73 @@ static void setLockFile(File *serverFile, int clientFd);
 static void setUnlockFile(File *serverFile);
 void removeLock(File *serverFile, int clientFd);
 
+////Crea il file se non esiste, altrimenti lo apre.
+////ritorna -1 in caso di errore
+//int createOpenFileServer(const char *pathname, ServerStorage *storage, int clientFd)
+//{
+//    LOCK(&(storage->globalMutex))
+//
+//    writeLogFd_N_Date(storage->logFile, clientFd);
+//
+//    //argomenti invalidi
+//    CSA(checkPathname(pathname) == -1, "createOpenFileServer: pathname sbaglito", EINVAL, ESOP("createOpenFileServer", 0); UNLOCK(&(storage->globalMutex)))
+//
+//    DIE(fprintf(storage->logFile, "Operazione: %s", "createOpenFileServer"))
+//    DIE(fprintf(storage->logFile, "Pathname: %s\n", pathname))
+//
+//
+//    CSA(storage == NULL, "createOpenFileServer: storage == NULL", EINVAL, ESOP("createOpenFileServer", 0); UNLOCK(&(storage->globalMutex)))
+//    icl_hash_t *hashPtrF = storage->fileSystem;
+//    assert(hashPtrF != NULL);
+//    File *serverFile = icl_hash_find(hashPtrF, (void *) pathname);
+//
+//    if(serverFile != NULL)
+//    {
+//        START_WRITE_LOCK
+//
+//        //se il client è già stato aperto, non si fa niente
+//        if(findSortedList(serverFile->fdOpen_SLPtr, clientFd) != 0)
+//        {
+//            insertSortedList(&(serverFile->fdOpen_SLPtr), clientFd);
+//            serverFile->canWriteFile = 1;
+//        } else
+//        {
+//            PRINT("File già aperto")
+//        }
+//
+//        END_WRITE_LOCK
+//    }
+//    else
+//    {
+//        NodoQi_file *testaFilePtrF = NULL;
+//        NodoQi_file *codaFilePtrF = NULL;
+//
+//        serverFile = createFile(pathname, clientFd);
+//        CSA(serverFile == NULL, "createOpenFileServer: impossibile creare la entry nella hash", EPERM, ESOP("createOpenFileServer", 0); UNLOCK(&(storage->globalMutex)))
+//
+//        START_WRITE_LOCK
+//
+//        addFile2Storage(serverFile, storage, &testaFilePtrF, &codaFilePtrF);
+//
+//        //Scrittura sul file di log
+//        if(testaFilePtrF != NULL)
+//        {
+//            fprintf(storage->logFile, "File espulsi: \n");
+//            writePathToFile(testaFilePtrF, storage->logFile);
+//            freeQueueFile(&testaFilePtrF, &codaFilePtrF);
+//        }
+//
+//
+//        NULL_SYSCALL(icl_hash_insert(hashPtrF, (void *) pathname, (void *) serverFile), "O_CREATE: impossibile inserire File nella hash")
+//        serverFile->canWriteFile = 1;
+//
+//        END_WRITE_LOCK
+//    }
+//
+//    ESOP("createOpenFileServer", 1)
+//    return 0;
+//}
+
 //da finire [controllare]
 int openFileServer(const char *pathname, int flags, ServerStorage *storage, int clientFd) {
     LOCK(&(storage->globalMutex))
@@ -36,6 +103,13 @@ int openFileServer(const char *pathname, int flags, ServerStorage *storage, int 
     icl_hash_t *hashPtrF = storage->fileSystem;
     assert(hashPtrF != NULL);
     File *serverFile = icl_hash_find(hashPtrF, (void *) pathname);
+    if(flags == O_CREATE + O_OPEN)
+    {
+        if(serverFile != NULL)
+            flags = O_OPEN;
+        else
+            flags = O_CREATE;
+    }
 
     NodoQi_file *testaFilePtrF = NULL;
     NodoQi_file *codaFilePtrF = NULL;
@@ -388,6 +462,7 @@ int createReadNFiles(int N, ServerStorage *storage, int clientFd, unsigned long 
 //funzione di supporto per createReadNFiles copyFileToDirServer
 //crea un file e vi coppia il contenuto presente in "serverFile"
 //ritorna -1 in caso di errore, 0 altrimenti
+
 static int creatFileAndCopy(File *serverFile)
 {
     //il file, anche se esiste già, viene sovrascritto perché il file nel server potrebbe essere cambiato
@@ -567,12 +642,13 @@ int appendToFileServer(const char *pathname, char *buf, size_t size, const char 
         serverFile->sizeFileByte = size;
         addBytes2Storage(serverFile, storage, &testaFilePtr, &codaFilePtr);
         RETURN_NULL_SYSCALL(serverFile->fileContent, malloc(sizeof(char) * size), "fillStructFile: malloc()") //size conta anche il '\0'
-        memset(serverFile->fileContent, '\0', size - 1);
+        memset(serverFile->fileContent, '\0', size);
         strncpy(serverFile->fileContent, buf, size);
     }
     else
     {
         serverFile->sizeFileByte = serverFile->sizeFileByte + size - 1;
+        CSA(storage->maxStorageBytes < serverFile->sizeFileByte, "appendToFileServer: spazio non sufficiente", ENOMEM, ESOP("appendToFile", 0); END_WRITE_LOCK)
         addBytes2Storage(serverFile, storage, &testaFilePtr, &codaFilePtr);
         REALLOC(serverFile->fileContent, sizeof(char) * serverFile->sizeFileByte) //il +1 è già contato in "serverFile->sizeFileByte" e in size (per questo motivo vien fatto -1)
         strncat(serverFile->fileContent, buf, size - 1); //sovvrascrive in automatico il '\0' di serverFile->fileContent e ne aggiunge uno alla fine

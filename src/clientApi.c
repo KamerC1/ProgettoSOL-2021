@@ -6,6 +6,7 @@ bool EN_STDOUT = true; //indica se stampare se abilitare -p
 #define ES_NEG if(EN_STDOUT == true) puts("Esito negativo");
 #define ES_POS if(EN_STDOUT == true) puts("Esito positivo");
 
+//se la connessione viene rifiutata ritorna -1.
 int openConnection(const char *sockname, int msec, const struct timespec abstime)
 {
     STAMPA_STDOUT(puts("\nOperazione: openConnection"))
@@ -43,6 +44,17 @@ int openConnection(const char *sockname, int msec, const struct timespec abstime
     }
     strncpy(SOCKNAME, sockname, MAX_BYTES_SOCKNAME);
 
+    int esitoConnessione;
+    READN(FD_SOCK, &esitoConnessione, sizeof(int), "Errore: readn()")
+
+    if(esitoConnessione == CONNESSIONE_RIFIUTATA)
+    {
+        puts("Connessione rifiutata");
+        errno = EACCES;
+        ES_NEG
+        return -1;
+    }
+
     ES_POS;
 
     return 0;
@@ -74,7 +86,7 @@ int openFile(const char* pathname, int flags)
     //controllo argomento
     CSA(checkPathname(pathname) == -1, "openFile: checkPathname", EINVAL, ES_NEG)
     STAMPA_STDOUT(printf("File: %s\n", pathname))
-    CSA(flags != O_OPEN && flags != O_CREATE && flags != O_LOCK && flags != O_CREATE + O_LOCK, "openFile: flag sbagliata", EINVAL, ES_NEG)
+    CSA(flags != O_OPEN && flags != O_CREATE && flags != O_LOCK && flags != O_CREATE + O_LOCK && flags != O_CREATE + O_OPEN, "openFile: flag sbagliata", EINVAL, ES_NEG)
     STAMPA_STDOUT(printf("Flags: %d\n", flags))
 
     //invia l'operazione della API
@@ -131,6 +143,7 @@ int readFile(const char *pathname, char **buf, size_t *size)
     int esitoAPI;
     READN(FD_SOCK, &esitoAPI, sizeof(int), "readFile: readn(FD_SOCK, &esitoAPI, sizeof(int))")
     CSA(esitoAPI != API_SUCCESS, "Errore readFileServer", esitoAPI, ES_NEG)
+
 
     //memorizzo i dati in *buf e *size
     READN(FD_SOCK, size, sizeof(size_t), "readFile: readn(FD_SOCK, size, sizeof(size_t))")
@@ -305,9 +318,11 @@ int writeFile(const char *pathname, const char *dirname)
 
 int appendToFile(const char *pathname, void *buf, size_t size, const char *dirname)
 {
+    STAMPA_STDOUT(puts("\nOperazione: appendToFile"))
+
     //controllo argomento
-    CS(checkPathname(pathname) == -1, "appendToFile: checkPathname", EINVAL)
-    CS(buf == NULL || strlen(buf) + 1 != size, "appendToFile: buf == NULL || strlen(buf) + 1", EINVAL) //"size": numero byte di buf e non il numero di caratteri
+    CSA(checkPathname(pathname) == -1, "appendToFile: checkPathname", EINVAL, ES_NEG)
+    CSA(buf == NULL || strlen(buf) + 1 != size, "appendToFile: buf == NULL || strlen(buf) + 1", EINVAL, ES_NEG) //"size": numero byte di buf e non il numero di caratteri
 
     //invia l'operazione della API
     int operazione = API_APPENDTOFILE;
@@ -324,6 +339,7 @@ int appendToFile(const char *pathname, void *buf, size_t size, const char *dirna
     WRITEN(FD_SOCK, &size, sizeof(size_t), "appendToFile: writen()")
     WRITEN(FD_SOCK, buf, size, "appendToFile: writen()")
 
+
     //Invia dirname
     if (dirname == NULL)
     {
@@ -339,13 +355,21 @@ int appendToFile(const char *pathname, void *buf, size_t size, const char *dirna
         WRITEN(FD_SOCK, dirnamTemp, dirnameBytes, "appendToFile: writen()")
     }
 
+    //stampa -p
+    STAMPA_STDOUT(printf("File: %s\n", pathname))
+    STAMPA_STDOUT(printf("buffer: %s\n", (char *) buf))
+    STAMPA_STDOUT(printf("Sieze buffer: %ld\n", size))
+    if(dirname != NULL)
+        STAMPA_STDOUT(printf("Dirname: %s\n", dirname))
+
 
 
     //ricezione esito dell'operazione del server
     int esitoAPI;
     READN(FD_SOCK, &esitoAPI, sizeof(int), "appendToFile: readn()")
-    CS(esitoAPI != API_SUCCESS, "Errore appendToFile", esitoAPI)
-    PRINT("appendToFile eseguita con sueccesso")
+    CSA(esitoAPI != API_SUCCESS, "Errore appendToFile", esitoAPI, ES_NEG)
+
+    ES_POS
 
     return 0;
 }
@@ -405,7 +429,7 @@ int lockFile(const char *pathname)
     //ricezione esito dell'operazione del server
     int esitoAPI;
     READN(FD_SOCK, &esitoAPI, sizeof(int), "lockFile: readn()")
-    CSA(esitoAPI != API_SUCCESS, "Errore esito closeFile", esitoAPI, ES_NEG)
+    CSA(esitoAPI != API_SUCCESS, "Errore esito lockFile", esitoAPI, ES_NEG)
     ES_POS
     return 0;
 }

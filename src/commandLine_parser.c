@@ -25,7 +25,7 @@ int cmlParsing(NodoCLPtr *testaPtr, NodoCLPtr *codaPtr, int argc, char *argv[], 
     *time = 0; //se -t non è specificato, *time è 0 di default
 
     int opt;
-    while ((opt = getopt(argc, argv, ":hf:w:W:D:r:R::d:l:u:c:pt:")) != -1)
+    while ((opt = getopt(argc, argv, ":hf:w:W:D:r:R::d:l:u:c:pt:a:")) != -1)
     {
         switch (opt)
         {
@@ -59,14 +59,18 @@ int cmlParsing(NodoCLPtr *testaPtr, NodoCLPtr *codaPtr, int argc, char *argv[], 
                 need_f = true;
                 pushCoda(testaPtr, codaPtr, opt, optarg);
                 break;
+            case 'a':
+                need_f = true;
+                pushCoda(testaPtr, codaPtr, opt, optarg);
+                break;
             case 'D':
-                if(equalToLptr(*codaPtr, 'W') == 1)
+                if(equalToLptr(*codaPtr, 'W') == 1 || equalToLptr(*codaPtr, 'w') == 1 || equalToLptr(*codaPtr, 'a') == 1)
                 {
                     need_f = true;
                     pushCoda(testaPtr, codaPtr, opt, optarg);
                 }
                 else
-                    PRINT("-D non segue -W");
+                    PRINT("-D non segue -W o -w");
 
                 break;
             case 'r':
@@ -74,7 +78,6 @@ int cmlParsing(NodoCLPtr *testaPtr, NodoCLPtr *codaPtr, int argc, char *argv[], 
                 pushCoda(testaPtr, codaPtr, opt, optarg);
                 break;
             case 'R':
-                printf("%c\t%s\n", opt, optarg);
                 need_f = true;
                 if(optarg == NULL)
                     pushCoda(testaPtr, codaPtr, opt, "0");
@@ -82,7 +85,7 @@ int cmlParsing(NodoCLPtr *testaPtr, NodoCLPtr *codaPtr, int argc, char *argv[], 
                     pushCoda(testaPtr, codaPtr, opt, optarg);
                 break;
             case 'd':
-                if(equalToLptr(*codaPtr, 'r')|| equalToLptr(*codaPtr, 'R'))
+                if(equalToLptr(*codaPtr, 'r') || equalToLptr(*codaPtr, 'R'))
                 {
                     need_f = true;
                     pushCoda(testaPtr, codaPtr, opt, optarg);
