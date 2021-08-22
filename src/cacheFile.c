@@ -33,8 +33,20 @@ ServerStorage *createStorage(size_t maxStorageBytesF, size_t maxStorageFilesF, s
 
     SYSCALL_NOTZERO(pthread_mutex_init(&(storage->globalMutex), NULL), "createStorage: pthread_mutex_init")
 
+    SYSCALL_NOTZERO(pthread_mutex_init(&(storage->mutexRemoveFile), NULL), "createStorage: pthread_mutex_init")
+    SYSCALL_NOTZERO(pthread_cond_init(&(storage->condRemoveFile), NULL), "rwLock_init: pthread_cond_init")
+    storage->isRemovingFile = false;
+    storage->isHandlingAPI = false;
+
     storage->fileSystem = icl_hash_create(maxStorageFilesF, NULL, NULL);
     CSAN(storage->fileSystem == NULL, "createStorage: icl_hash_create", EPERM, free(storage))
+
+    storage->logFile = NULL;
+
+
+    storage->maxByteStored = 0;
+    storage->maxFileStored = 0;
+    storage->numVictims = 0;
 
     return storage;
 }
@@ -42,7 +54,7 @@ ServerStorage *createStorage(size_t maxStorageBytesF, size_t maxStorageFilesF, s
 //aggiorana la dimensione dello storage, sia lo spazio che i numero dei file, quando viene aggiunto un nuovo file.
 // Se necessario, elimina i file già presenti
 //se fallisce, termina perché il file system rimarrebbe in uno stato incosistente
-void addFile2Storage(File *serverFile, ServerStorage *storage)
+void addFile2Storage(File *serverFile, ServerStorage *storage, NodoQiPtr_File *testaPtrF, NodoQiPtr_File *codaPtrF)
 {
     NULL_SYSCALL(serverFile, "updateStorage: serverFile == NULL")
     NULL_SYSCALL(storage, "updateStorage: storage == NULL")
@@ -51,20 +63,21 @@ void addFile2Storage(File *serverFile, ServerStorage *storage)
     if(storage->currentStorageFiles >= storage->maxStorageFiles)
     {
         puts("RIMPIAZZZOOOOOOOOOOOOOOOO FILES"); //[ELIMINARE]
-        FIFO_ReplacementAlg(storage, NULL, NULL, 0);
+        FIFO_ReplacementAlg(storage, testaPtrF, codaPtrF, serverFile->path);
     }
 
     //Aggiornamento storage
     storage->currentStorageFiles++;
-//    storage->currentStorageBytes += serverFile->sizeFileByte; //inutile perchè quando si crea un file, questo è vuoto
+    storage->maxFileStored++;
+
     //aggiornamento lista dei "file creati (politica FIFO)"
     pushStringa(&(storage->FIFOtestaPtr), &(storage->FIFOcodaPtr), serverFile->path);
 }
 
-//aggiorna la dimensione dello storage quando si scrive su un file - moidifica solo lo spazio.
+//aggiorna la dimensione dello storage quando si scrive su un file - modifica solo lo spazio.
 // Se necessario, elimina i file già presenti
 //se fallisce, termina perché il file system rimarrebbe in uno stato incosistente
-void addBytes2Storage(File *serverFile, ServerStorage *storage, NodoQiPtr_File *testaPtrF, NodoQiPtr_File *codaPtrF, bool insert)
+void addBytes2Storage(File *serverFile, ServerStorage *storage, NodoQiPtr_File *testaPtrF, NodoQiPtr_File *codaPtrF)
 {
     NULL_SYSCALL(serverFile, "addBytes2Storage: serverFile == NULL")
     NULL_SYSCALL(storage, "addBytes2Storage: storage == NULL")
@@ -73,38 +86,69 @@ void addBytes2Storage(File *serverFile, ServerStorage *storage, NodoQiPtr_File *
     size_t possibleCurrentBytes = storage->currentStorageBytes + serverFile->sizeFileByte;
     while(possibleCurrentBytes > storage->maxStorageBytes)
     {
-        puts("RIMPIAZZOOOOOOOOOOOOOOOOOOo BYTES");
-        FIFO_ReplacementAlg(storage, testaPtrF, codaPtrF, insert);
+        puts("RIMPIAZZOOOOOOOOOOOOOOOOOOo BYTES"); //[ELIMINARE]
+
+//        printf("\n\n\n\n\n\n\nSERVERFILE PRIMA: %s\n\n\n\n\n\n\n", serverFile->path);
+
+
+        FIFO_ReplacementAlg(storage, testaPtrF, codaPtrF, serverFile->path);
         possibleCurrentBytes = storage->currentStorageBytes + serverFile->sizeFileByte;
     }
 
     //Aggiornamento storage
     storage->currentStorageBytes += serverFile->sizeFileByte;
+    storage->maxByteStored += serverFile->sizeFileByte;
 }
 
 //Elimina un file dallo storage e ne restituisce la dimensione (la politica di rimpiazzamento è FIFO)
-void FIFO_ReplacementAlg(ServerStorage *storage, NodoQiPtr_File *testaPtrF, NodoQiPtr_File *codaPtrF, bool insert)
+//pathnameCaller è il pathname del file che ha causato la rimozione
+void FIFO_ReplacementAlg(ServerStorage *storage, NodoQiPtr_File *testaPtrF, NodoQiPtr_File *codaPtrF, char *pathnameCaller)
 {
     assert(storage != NULL);
+    assert(storage->FIFOtestaPtr != NULL);
 
+    char *pathnameFile2Remove = storage->FIFOtestaPtr->stringa;
+    //Il primo elemento della FIFO protrebbe essere il file chiamante: in questo caso, prendiamo il secondo file nella coda
+    if(strcmp(pathnameFile2Remove, pathnameCaller) == 0)
+    {
+        assert(swapFirstWithSecond(&(storage->FIFOtestaPtr), &(storage->FIFOcodaPtr)) == 0);
+    }
+    pathnameFile2Remove = popString(&(storage->FIFOtestaPtr), &(storage->FIFOcodaPtr));
 
-    char *pathnameFile2Remove = popString(&(storage->FIFOtestaPtr), &(storage->FIFOcodaPtr));
 
     //se fallisce, termino perché il file system rimarrebbe in uno stato incosistente
     File *serverFile = icl_hash_find(storage->fileSystem, (void *) pathnameFile2Remove);
     NULL_SYSCALL(serverFile, "FIFO_ReplacementAlg: icl_hash_find")
+
+
+    //attendo che nessuno acceda al file da eliminare
+//    LOCK(&(serverFile->fileLock.mutexFile))
+//    rwLock_startWriting(&serverFile->fileLock);
+//    UNLOCK(&(serverFile->fileLock.mutexFile))
+
+
+
+
     size_t temp_sizeFileByte = serverFile->sizeFileByte;
+
+    assert(serverFile->path != NULL);
+
     SYSCALL(icl_hash_delete(storage->fileSystem, (void *) pathnameFile2Remove, free, NULL), "FIFO_ReplacementAlg: icl_hash_delete")
 
-    if(insert == 1)
-        pushFile(testaPtrF, codaPtrF, serverFile);
-    else
-        freeFileData(serverFile);
+    pushFile(testaPtrF, codaPtrF, serverFile);
+
+    assert(serverFile != NULL);
+
+
+//    END_WRITE_LOCK
 
     free(pathnameFile2Remove);
 
     storage->currentStorageFiles--;
     storage->currentStorageBytes -= temp_sizeFileByte;
+    storage->numVictims++;
+
+
 }
 
 int copyFile2Dir(NodoQiPtr_File *testaPtrF, NodoQiPtr_File *codaPtrF, const char *dirname)
@@ -126,14 +170,9 @@ int copyFile2Dir(NodoQiPtr_File *testaPtrF, NodoQiPtr_File *codaPtrF, const char
 
     while(serverFile != NULL)
     {
-        if(wrtieFile(serverFile) == -1)
-        {
-            free(processPath);
-            freeFileData(serverFile);
-            freeQueueFile(testaPtrF, codaPtrF);
-            CLOSEDIR(directory)
-            return -1;
-        }
+        //se falisce, si scrive copia il prossimo file
+        wrtieFile(serverFile);
+
         freeFileData(serverFile);
         serverFile = popFile(testaPtrF, codaPtrF);
     }
@@ -154,8 +193,9 @@ int wrtieFile(File *serverFile)
     //==Creazione file e scrittura su di esso==
     //il file, anche se esiste già, viene sovrascritto perché il file nel server potrebbe essere cambiato
     FILE *diskFile = fopen(basename(serverFile->path), "w");
+
     CS(diskFile == NULL, "copyFile2Dir: fopen()", errno)
-    if (fputs(serverFile->fileContent, diskFile) == EOF)
+    if (serverFile->fileContent != NULL && fputs(serverFile->fileContent, diskFile) == EOF)
     {
         PRINT("copyFile2Dir: fputs");
         SYSCALL_NOTZERO(fclose(diskFile), "copyFile2Dir: fclose() - termino processo")
@@ -168,11 +208,18 @@ int wrtieFile(File *serverFile)
 void stampaStorage(ServerStorage *storage)
 {
     assert(storage != NULL);
+    LOCK(&(storage->globalMutex))
 
     printf("maxStorageBytes: %ld\n", storage->maxStorageBytes);
     printf("currentStorageBytes: %ld\n", storage->currentStorageBytes);
     printf("maxStorageFiles: %ld\n", storage->maxStorageFiles);
     printf("currentStorageFiles: %ld\n", storage->currentStorageFiles);
+    printf("maxFileStored: %ld\n", storage->maxFileStored);
+    printf("maxByteStored: %ld\n", storage->maxByteStored);
+    printf("numVictims: %ld\n", storage->numVictims);
+
 
     stampaQueueStringa(storage->FIFOtestaPtr);
+
+    UNLOCK(&(storage->globalMutex))
 }
