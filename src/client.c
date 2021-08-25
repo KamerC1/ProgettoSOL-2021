@@ -6,10 +6,11 @@
 #include <limits.h>
 #include <sys/stat.h>
 
+#include "../include/commandLine_parser.h"
+#include "../include/clientAPI.h"
+#include "../strutture_dati/queueChar/queueChar.h"
+#include "../include/utilsPathname.h"
 
-#include "commandLine_parser.c" //mettere .h [controllare]
-#include "clientApi.c" //mettere .h [controllare]
-#include "../strutture_dati/queueChar/queueChar.c" //mettere .h [controllare]
 
 void runRequest(char optionF, char argumentF[], NodoCLPtr *testaCLPtrF, NodoCLPtr *codaCLPtrF);
 void tokenString(char stringToToken[], NodoQiPtr_string *testaStringPtr, NodoQiPtr_string *codaStringPtr);
@@ -27,8 +28,6 @@ void gestione_R(char argumentF[], NodoCLPtr *testaCLPtrF, NodoCLPtr *codaCLPtrF)
 void gestione_l(char argumentF[], NodoCLPtr *testaCLPtrF, NodoCLPtr *codaCLPtrF);
 void gestione_u(char argumentF[], NodoCLPtr *testaCLPtrF, NodoCLPtr *codaCLPtrF);
 void gestione_c(char argumentF[], NodoCLPtr *testaCLPtrF, NodoCLPtr *codaCLPtrF);
-
-bool EN_STDOUT; //mettere in .h di clientAPI
 
 #define HELP_MSG \
 "-f filename:  nome del socket a cui connettersi;\n\
@@ -113,7 +112,7 @@ void runRequest(char optionF, char argumentF[], NodoCLPtr *testaCLPtrF, NodoCLPt
             gestione_w(argumentF, testaCLPtrF, codaCLPtrF);
             break;
         case 'W':
-            PRINT("W");
+//            PRINT("W");
             gestione_W(argumentF, testaCLPtrF, codaCLPtrF);
 
             break;
@@ -242,9 +241,11 @@ void gestione_W(char argumentF[], NodoCLPtr *testaCLPtrF, NodoCLPtr *codaCLPtrF)
         free(tempStringPop);
 
 
-        SYSCALL(openFile(realPath, O_CREATE + O_OPEN), "Erdfdrore")
+        SYSCALL(openFile(realPath, O_CREATE + O_OPEN), "Errore")
 
         SYSCALL(writeFile(realPath, argument), "Errore")
+
+//        SYSCALL(closeFile(realPath), "Errore")
 
         free(realPath);
         tempStringPop = popString(&testaStringPtr, &codaStringPtr);
@@ -291,11 +292,13 @@ void gestione_a(char argumentF[], NodoCLPtr *testaCLPtrF, NodoCLPtr *codaCLPtrF)
     char *realPath = getAbsPath(pathName);
     NULL_SYSCALL(realPath, "Errore gestione_a: getRealPath")
 
-    SYSCALL(openFile(realPath, O_CREATE + O_OPEN), "Erdfdrore")
+    SYSCALL(openFile(realPath, O_CREATE + O_OPEN + O_LOCK), "Erdfdrore")
 
     int lenString = strlen(string);
     assert(lenString >= 1); //non è possibile avere una stringa vuota
     SYSCALL(appendToFile(realPath, string, lenString+1, dirName), "Errore")
+
+    SYSCALL(closeFile(realPath), "Errore")
 
     free(realPath);
 
@@ -343,6 +346,7 @@ void gestione_r(char argumentF[], NodoCLPtr *testaCLPtrF, NodoCLPtr *codaCLPtrF)
                 free(readBuffer);
         }
 
+        SYSCALL(closeFile(realPath), "Errore")
 
         free(realPath);
         tempStringPop = popString(&testaStringPtr, &codaStringPtr);
@@ -392,11 +396,8 @@ void gestione_l(char argumentF[], NodoCLPtr *testaCLPtrF, NodoCLPtr *codaCLPtrF)
     {
         char *realPath = getAbsPath(tempStringPop);
 
-        int isPathPresentVal = isPathPresent(realPath);
-        SYSCALL(isPathPresentVal, "gestione_l")
-
-        SYSCALL(openFile(realPath, O_CREATE + O_OPEN), "Erdfdrore")
-        SYSCALL(lockFile(realPath), "Errore")
+        SYSCALL(openFile(realPath, O_CREATE + O_OPEN + O_LOCK), "Errore")
+//        SYSCALL(lockFile(realPath), "Errore")
 
 
         free(realPath);
@@ -450,7 +451,7 @@ void gestione_c(char argumentF[], NodoCLPtr *testaCLPtrF, NodoCLPtr *codaCLPtrF)
     {
         char *realPath = getAbsPath(tempStringPop);
 
-        SYSCALL(openFile(realPath, O_OPEN), "Errore")
+        SYSCALL(openFile(realPath, O_LOCK), "Errore")
 
         //Non Termina il processo solamente se la remove fallisce perché non è stato trovato il file
         if(removeFile(realPath) == -1)
@@ -563,15 +564,16 @@ void visitDir(const char dirName[], const char dirnameCache[], int *N)
             //Faccio la write del file
 
             char *realPath = getRealPath(filename);
-            printf("CANE: %s\n", filename);
             NULL_SYSCALL(realPath, "visitDir: getRealPath")
-            SYSCALL(openFile(realPath, O_CREATE + O_OPEN), "Erdfdrore")
+            SYSCALL(openFile(realPath, O_CREATE + O_OPEN + O_LOCK), "Errore")
 
             //se la write fallisce, non viene contata come scrittura e si procede oltre
             if(writeFile(realPath, dirnameCache) != -1)
             {
                 *N = *N - 1;
             }
+
+            SYSCALL(closeFile(realPath), "Errore")
             free(realPath);
         }
     }

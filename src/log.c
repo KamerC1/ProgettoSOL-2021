@@ -35,6 +35,17 @@ void writeLogFd_N_Date(FILE *logFile, int clientFd)
     tm_info = localtime(&timer);
     strftime(timeString, 20, "%d-%m-%Y %H:%M:%S", tm_info);
 
-    fprintf(logFile, "Client fd: %d\tData: %s\n", clientFd, timeString);
+    DIE(fprintf(logFile, "Thread Worker: %ld \tClient fd: %d \tData: %s\n", pthread_self(), clientFd, timeString));
+}
 
+char *getCurrentTime()
+{
+    time_t timer;
+    char *timeString = malloc(sizeof(char) * 20);
+    struct tm* tm_info;
+    timer = time(NULL);
+    tm_info = localtime(&timer);
+    strftime(timeString, 20, "%d-%m-%Y %H:%M:%S", tm_info);
+
+    return timeString;
 }

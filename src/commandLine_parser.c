@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <getopt.h>
+#include <limits.h>
 #include "../utils/util.h"
 #include "../include/commandLine_parser.h"
 
@@ -45,7 +46,7 @@ int cmlParsing(NodoCLPtr *testaPtr, NodoCLPtr *codaPtr, int argc, char *argv[], 
 
                     size_t optArgLen = strlen(optarg);
                     *sockName_f = malloc(sizeof(char) * (optArgLen + 1));
-                    SYSCALL(*sockName_f == NULL, "cmlParsing: malloc")
+                    NULL_SYSCALL(*sockName_f, "cmlParsing: malloc")
                     memset(*sockName_f, '\0', optArgLen + 1);
                     strncpy(*sockName_f, optarg, optArgLen);
                 }
@@ -228,7 +229,7 @@ int findOption(NodoCLPtr lPtr, char opt)
         return 1;
     }
     else
-        findOption(lPtr->prossimoPtr, opt);
+        return findOption(lPtr->prossimoPtr, opt);
 }
 
 //restituisce 1 se l'opt di lPtr è uguale a opt

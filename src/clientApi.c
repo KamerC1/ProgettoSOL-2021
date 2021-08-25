@@ -1,8 +1,8 @@
 #include "../include/clientAPI.h"
+#include "../include/utilsPathname.h"
 #include <stdbool.h>
 
-bool EN_STDOUT = true; //indica se stampare se abilitare -p
-#define STAMPA_STDOUT(val) if(EN_STDOUT == true) {val;}
+bool EN_STDOUT;
 #define ES_NEG if(EN_STDOUT == true) puts("Esito negativo");
 #define ES_POS if(EN_STDOUT == true) puts("Esito positivo");
 
@@ -86,7 +86,7 @@ int openFile(const char* pathname, int flags)
     //controllo argomento
     CSA(checkPathname(pathname) == -1, "openFile: checkPathname", EINVAL, ES_NEG)
     STAMPA_STDOUT(printf("File: %s\n", pathname))
-    CSA(flags != O_OPEN && flags != O_CREATE && flags != O_LOCK && flags != O_CREATE + O_LOCK && flags != O_CREATE + O_OPEN, "openFile: flag sbagliata", EINVAL, ES_NEG)
+    CSA(flags != O_OPEN && flags != O_CREATE && flags != O_LOCK && flags != O_CREATE + O_LOCK && flags != O_CREATE + O_OPEN && flags != O_CREATE + O_OPEN + O_LOCK, "openFile: flag sbagliata", EINVAL, ES_NEG)
     STAMPA_STDOUT(printf("Flags: %d\n", flags))
 
     //invia l'operazione della API
@@ -174,8 +174,8 @@ int copyFileToDir(const char *pathname, const char *dirname)
     STAMPA_STDOUT(puts("\nOperazione: copyFileToDir"))
 
     //controllo argomento
-    CSA(checkPathname(pathname) == -1, "writeFile: checkPathname", EINVAL, ES_NEG)
-    CSA(dirname == NULL, "writeFile: checkPathname", EINVAL, ES_NEG)
+    CSA(checkPathname(pathname) == -1, "copyFileToDir: checkPathname", EINVAL, ES_NEG)
+    CSA(dirname == NULL, "copyFileToDir: checkPathname", EINVAL, ES_NEG)
 
     STAMPA_STDOUT(printf("File: %s\n", pathname))
     STAMPA_STDOUT(printf("Directory: %s\n", dirname))
@@ -183,27 +183,27 @@ int copyFileToDir(const char *pathname, const char *dirname)
 
     //invia l'operazione della API
     int operazione = API_COPY_FILE_TODIR;
-    WRITEN(FD_SOCK, &operazione, sizeof(int), "writeFile: writen()")
+    WRITEN(FD_SOCK, &operazione, sizeof(int), "copyFileToDir: writen()")
 
     //Invia pathname
     int pathnameBytes = strlen(pathname) + 1; //+1 per '\0'
     char temp[pathnameBytes]; //writen non può prendere una costante [eliminare]
     strncpy(temp, pathname, pathnameBytes);
-    WRITEN(FD_SOCK, &pathnameBytes, sizeof(int), "writeFile: writen()")
-    WRITEN(FD_SOCK, temp, pathnameBytes, "writeFile: writen()")
+    WRITEN(FD_SOCK, &pathnameBytes, sizeof(int), "copyFileToDir: writen()")
+    WRITEN(FD_SOCK, temp, pathnameBytes, "copyFileToDir: writen()")
 
     int dirnameBytes = strlen(dirname) + 1; //+1 per '\0'
     char dirnamTemp[dirnameBytes]; //writen non può prendere una costante [eliminare]
     strncpy(dirnamTemp, dirname, dirnameBytes);
-    WRITEN(FD_SOCK, &dirnameBytes, sizeof(int), "writeFile: writen()")
-    WRITEN(FD_SOCK, dirnamTemp, dirnameBytes, "writeFile: writen()")
+    WRITEN(FD_SOCK, &dirnameBytes, sizeof(int), "copyFileToDir: writen()")
+    WRITEN(FD_SOCK, dirnamTemp, dirnameBytes, "copyFileToDir: writen()")
 
 
     //ricezione esito dell'operazione del server
     int esitoAPI;
-    READN(FD_SOCK, &esitoAPI, sizeof(int), "writeFile: readn()")
-    CSA(esitoAPI != API_SUCCESS, "Errore writeFile", esitoAPI, ES_NEG)
-    PRINT("writeFile eseguita con sueccesso")
+    READN(FD_SOCK, &esitoAPI, sizeof(int), "copyFileToDir: readn()")
+    CSA(esitoAPI != API_SUCCESS, "Errore copyFileToDir", esitoAPI, ES_NEG)
+    PRINT("copyFileToDir eseguita con sueccesso")
 
     //stampa bytes letti
     long returnValueCopy;
@@ -428,6 +428,7 @@ int lockFile(const char *pathname)
 
     //ricezione esito dell'operazione del server
     int esitoAPI;
+    puts("ASPETTTO");
     READN(FD_SOCK, &esitoAPI, sizeof(int), "lockFile: readn()")
     CSA(esitoAPI != API_SUCCESS, "Errore esito lockFile", esitoAPI, ES_NEG)
     ES_POS

@@ -73,7 +73,6 @@ ConfigFile_t *configServer(char stringFile[])
     ConfigFile_t *configStruct = malloc(sizeof(ConfigFile_t));
     NULL_SYSCALL(configStruct, "configParser: malloc")
     setDefaultConfigFile(configStruct);
-
     FILE *configFile = fopen(stringFile, "r");
 
     if(configFile == NULL)
