@@ -16,7 +16,9 @@ void pushFile(NodoQiPtr_File *testaPtrF, NodoQiPtr_File *codaPtrF, File *fileF);
 File *popFile(NodoQiPtr_File *lPtrF, NodoQiPtr_File *codaPtr);
 //int top(NodoQiPtr_string lPtrF);
 //int findDataQueue(NodoQiPtr_string lPtr, int data);
+void writePathToFile(NodoQiPtr_File lPtrF, FILE *fileLog);
 void freeQueueFile(NodoQiPtr_File *lPtrF, NodoQiPtr_File *codaPtr);
 void stampaQueueFile(NodoQiPtr_File lPtrF);
+size_t numberOfElements(NodoQiPtr_File lPtrF);
 
 #endif

@@ -95,6 +95,28 @@ File *popFile(NodoQiPtr_File *lPtrF, NodoQiPtr_File *codaPtr)
 //        puts("NULL");
 //}
 
+size_t numberOfElements(NodoQiPtr_File lPtrF)
+{
+    size_t returnValue = 0;
+    while(lPtrF != NULL)
+    {
+        returnValue++;
+        lPtrF = lPtrF->prossimoPtr;
+    }
+
+    return returnValue;
+}
+
+//stampa il path su: "fileLog"
+void writePathToFile(NodoQiPtr_File lPtrF, FILE *fileLog)
+{
+    if(lPtrF != NULL)
+    {
+        DIE(fprintf(fileLog, "%s\n", lPtrF->file->path))
+        writePathToFile(lPtrF->prossimoPtr, fileLog);
+    }
+}
+
 void freeQueueFile(NodoQiPtr_File *lPtrF, NodoQiPtr_File *codaPtr)
 {
     if(*lPtrF != NULL)

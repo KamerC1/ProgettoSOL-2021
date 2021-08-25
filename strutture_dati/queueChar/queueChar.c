@@ -4,6 +4,38 @@
 #include "../../utils/util.h"
 #include "queueChar.h"
 
+//int main()
+//{
+//    NodoQiPtr_string testa = NULL;
+//    NodoQiPtr_string coda = NULL;
+//
+//    pushStringa(&testa, &coda, "1");
+//    pushStringa(&testa, &coda, "2");
+//    pushStringa(&testa, &coda, "3");
+//    pushStringa(&testa, &coda, "4");
+//    pushStringa(&testa, &coda, "5");
+//    pushStringa(&testa, &coda, "6");
+//
+//    stampaQueueStringa(testa);
+//
+//    swapFirstWithSecond(&testa, &coda);
+//
+//
+//    stampaQueueStringa(testa);
+//
+//    free(popString(&testa, &coda));
+//
+//    stampaQueueStringa(testa);
+//
+//    swapFirstWithSecond(&testa, &coda);
+//
+//    stampaQueueStringa(testa);
+//
+//    freeQueueStringa(&testa, &coda);
+//
+//    return 0;
+//}
+
 void pushStringa(NodoQiPtr_string *testaPtrF, NodoQiPtr_string *codaPtrF, char dataF[])
 {
     NodoQiPtr_string nuovoPtr = malloc(sizeof(NodoQi_string));
@@ -71,7 +103,7 @@ char *popString(NodoQiPtr_string *lPtrF, NodoQiPtr_string *codaPtr)
     }
     else
     {
-        PRINT("NodoQiPtr_string è vuota");
+//        PRINT("\t\tNodoQiPtr_string è vuota");
         return NULL;
     }
 }
@@ -121,6 +153,7 @@ int deleteDataQueueStringa(NodoQiPtr_string *lPtr, NodoQiPtr_string *codaPtr, ch
                 *codaPtr = NULL;
             }
 
+            free(tempPtr->stringa);
             free(tempPtr);
 
             return 0;
@@ -148,6 +181,7 @@ int deleteDataQueueStringa(NodoQiPtr_string *lPtr, NodoQiPtr_string *codaPtr, ch
                     *codaPtr = precedentePtr;
                 }
 
+                free(tempPtr->stringa);
                 free(tempPtr);
 
                 return 0;
@@ -184,4 +218,23 @@ void freeQueueStringa(NodoQiPtr_string *lPtrF, NodoQiPtr_string *codaPtr)
     {
         *codaPtr = NULL;
     }
+}
+
+
+//scambia il primo elemento della coda con il secondo
+int swapFirstWithSecond(NodoQiPtr_string *lPtrF, NodoQiPtr_string *codaPtr)
+{
+    if(*lPtrF == NULL)
+        return -1;
+    if((*lPtrF)->prossimoPtr == NULL)
+        return -1;
+
+//    char *first = (*lPtrF)->stringa;
+//    char *second = (*lPtrF)->prossimoPtr->stringa;
+
+    char *temp = (*lPtrF)->stringa;
+    (*lPtrF)->stringa = (*lPtrF)->prossimoPtr->stringa;
+    (*lPtrF)->prossimoPtr->stringa = temp;
+
+    return 0;
 }

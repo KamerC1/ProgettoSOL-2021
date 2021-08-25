@@ -47,6 +47,7 @@ void rwLock_startWriting(RwLock_t *rwLockF)
     rwLockF->num_writers_waiting++;
     while(rwLockF->num_readers_active > 0 || rwLockF->writer_active == true)
     {
+        puts("\n\n\n\n\n\nAPSETOOOO\n\n\n\n\n\n\n");
         WAIT(&(rwLockF->condFile), &(rwLockF->mutexFile))
     }
     rwLockF->num_writers_waiting--;

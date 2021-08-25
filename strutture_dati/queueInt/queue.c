@@ -75,7 +75,7 @@ int findDataQueue(NodoQiPtr lPtr, int data)
         return 1;
     }
     else
-        findDataQueue(lPtr->prossimoPtr, data);
+        return findDataQueue(lPtr->prossimoPtr, data);
 }
 
 //elimina il "data" dalla coda- Ritorna 0 in caso di successo, -1 altrimenti

@@ -89,7 +89,7 @@ int findSortedList(NodoSLPtr lPtr, int valore)
         return -1;
     }
     else
-        findSortedList(lPtr->prossimoPtr, valore);
+        return findSortedList(lPtr->prossimoPtr, valore);
 }
 
 void stampaSortedList(NodoSLPtr lPtr)

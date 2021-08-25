@@ -17,6 +17,7 @@ char *popString(NodoQiPtr_string *lPtrF, NodoQiPtr_string *codaPtr);
 int deleteDataQueueStringa(NodoQiPtr_string *lPtr, NodoQiPtr_string *codaPtr, char *data);
 void stampaQueueStringa(NodoQiPtr_string lPtrF);
 void freeQueueStringa(NodoQiPtr_string *lPtrF, NodoQiPtr_string *codaPtr);
+int swapFirstWithSecond(NodoQiPtr_string *lPtrF, NodoQiPtr_string *codaPtr);
 
 
 #endif
