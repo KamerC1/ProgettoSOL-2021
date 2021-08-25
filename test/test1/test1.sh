@@ -15,7 +15,7 @@ SERVER_PID=$!
 export SERVER_PID
 
 #preparazione configurazione server e valgrind
-sleep 4
+sleep 6
 
 
 timeWait=200

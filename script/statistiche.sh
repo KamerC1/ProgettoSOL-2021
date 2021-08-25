@@ -123,11 +123,10 @@ while read -r line ; do
         ((currentCon--))
     elif grep -q "Nuova connessione:" <<< "$line" ; then
         ((currentCon++))
-
         if [ "$currentCon" -gt "$maxCon" ]; then
             maxCon=$currentCon
         fi 
     fi
-done <<< $(grep "connessione" $1 | grep -v "/")
+done < <(grep "connessione" $1 | grep -v "/") #sulla VM "done <<< $(grep "connessione" $1 | grep -v "/")" non funziona
 
 echo "Massimo numero di connessioni contemporanee: $maxCon"
