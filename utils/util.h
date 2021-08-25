@@ -11,6 +11,7 @@
 #define SYSCALL(c,e) if(c==-1) { perror(e);exit(errno);}
 //usare con le funzioni che ritornano NULL quando falliscono e di cui si vuole memorizzare il valore di ritorno (es: fopen)
 #define RETURN_NULL_SYSCALL(retrunVar, fun, text) if((retrunVar=fun) == NULL) { perror(text);exit(errno); }
+#define NULL_SYSCALL(fun, text) if(fun == NULL) { perror(text);exit(errno); }
 //usare per le syscall che quando falliscono ritornano un valore != 0
 #define SYSCALL_NOTZERO(syscall, text) if(syscall != 0) {perror(text);exit(errno);}
 #define THREAD_CREATE(a, b, c, d, text) if(pthread_create(a, b, c, d) != 0) { perror(text);exit(EXIT_FAILURE);}
@@ -26,6 +27,8 @@
 //esegue delle istruzioni "act" in caso di errore
 #define CSA(cond, text, err, act) if(cond) {PRINT(text); act; errno=err; return -1;} //CSA = COND_SETERR_ACT
 #define CSAN(cond, text, err, act) if(cond) {PRINT(text); act; errno=err; return NULL;} //CSA = COND_SETERR_ACT_NULL
+
+#define DIE(fun) if(fun==-1) {exit(errno);}
 
 #define FCLOSE(file) if(fclose(file)==EOF) {exit(errno);}
 #define CLOSEDIR(dir) if(closedir(dir)==EOF) {exit(errno);}
@@ -62,6 +65,13 @@ if (pthread_cond_signal(c) != 0)                        \
 if (pthread_cond_wait(c,l) != 0)                        \
 {	                                                    \
     fprintf(stderr, "ERRORE FATALE wait\n");			\
+    pthread_exit((void*)EXIT_FAILURE);                  \
+}
+
+#define BCAST(c)                                        \
+if (pthread_cond_broadcast(c) != 0)                     \
+{	                                                    \
+    fprintf(stderr, "ERRORE FATALE broadcast\n");	    \
     pthread_exit((void*)EXIT_FAILURE);                  \
 }
 

@@ -13,18 +13,74 @@
 #define MAX_BYTES_SOCKNAME 256 
 #define MAXBACKLOG 108
 
+#define CONNESSIONE_RIFIUTATA 9
+#define CONNESSIONE_ACCETTATA 10
 #define API_OPENFILE 11
 #define API_READFILE 12
 #define API_READNFILES 13
 #define API_WRITEFILE 14
 #define API_APPENDTOFILE 15
+#define API_CLOSEFILE 16
+#define API_REMOVEFILE 17
+#define API_LOCKFILE 18
+#define API_UNLOCKFILE 19
+#define API_REMOVE_CLIENT_INFO 20
+#define API_ISFILE_PRESENT 21
+#define API_COPY_FILE_TODIR 22
+#define API_GET_FILE_SIZEBYTE 23
+
+
+
 
 //Valore da inviare al server quando un argomento delle API è NULL
 #define ARGUMENT_NULL 0 
 
 #define WRITEN(fd, buf, size, text) if(writen(fd, buf, size)==-1) { PRINT(text); return -1;}
-#define READN(fd, buf, size, text) if(readn(fd, buf, size)==-1) { PRINT(text); return -1;}
+//#define READN(fd, buf, size, text) if(readn(fd, buf, size)==-1) { PRINT(text); return -1;}
 
+//restituisce -1 se rean restituisce 0 o -1
+//Le parentesi "{}" servono per distruggere le variabili locali
+#define READN(fd, buf, size, text)                      \
+{                                                       \
+    int temp = readn(fd, buf, size);                    \
+    if(temp == 0)                                       \
+    {                                                   \
+        PRINT("READN non ha letto nullo");              \
+        return -1;                                      \
+    }                                                   \
+    else if(temp == -1)                                 \
+    {                                                   \
+        PRINT(text);                                    \
+        return -1;                                      \
+    }                                                   \
+}                                                       \
+
+/*
+//restituisce -1 se rean restituisce 0 o -1
+//Le parentesi "{}" servono per distruggere le variabili locali
+#define WRITEN_C(fd, buf, size, text)                      \
+    if(writen(fd, buf, size)==-1)                          \
+    {                                                      \
+        if(errno = ECONNRESET)                             \
+            return -1;                                     \
+    }                                                      \
+    else    
+
+*/
+
+#define WRITEN_C(fd, buf, size, text)                                                           \
+if(writen(fd, buf, size) == -1)                                                                 \
+{                                                                                               \
+    if(errno == ECONNRESET || errno == EPIPE)                                                   \
+    {                                                                                           \
+        PRINT("Impossibile fare la write: connessione chiusa dal client. Vado avanti")          \
+    }                                                                                           \
+    else                                                                                        \
+    {                                                                                           \
+        perror("API_WRITEFILE: writen()");                                                      \
+        exit(EXIT_FAILURE);                                                                     \
+    }                                                                                           \
+}                                                                                               \
 
 /** Evita letture parziali
  *
