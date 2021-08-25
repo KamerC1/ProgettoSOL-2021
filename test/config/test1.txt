@@ -1,0 +1,4 @@
+MAX_BYTES=128000000;
+MAX_FILE=10000;
+MAX_WORKER=1;
+LOGFILE=test/test1/log/log.txt;
