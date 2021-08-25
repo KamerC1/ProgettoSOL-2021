@@ -11,6 +11,7 @@
 
 
 
+
 struct file {
     char *path;
     char *fileContent;
@@ -40,6 +41,11 @@ struct serverStorage
     NodoQi_string *FIFOcodaPtr;
 
     pthread_mutex_t globalMutex;
+
+    bool isRemovingFile; //è true se si sta attualemente elimindo il file
+    bool isHandlingAPI; //è true se si sta gestendo una funzione della API
+    pthread_mutex_t mutexRemoveFile;  //g
+    pthread_cond_t condRemoveFile;    //cond
 
     icl_hash_t *fileSystem; //tabella hash che memorizza l'insieme dei file
 
@@ -89,6 +95,13 @@ if(serverFile->lockFd != -1 && serverFile->lockFd != clientFd)      \
     rwLock_endWriting(&serverFile->fileLock);     \
     UNLOCK(&(serverFile->fileLock.mutexFile))       \
 
+#define WAKES_UP_REMOVE                             \
+            storage->isHandlingAPI = false;         \
+            SIGNAL(&(storage->condRemoveFile))      \
+
+#define WAKES_UP_API                             \
+    storage->isRemovingFile = false;            \
+    SIGNAL(&(storage->condRemoveFile))          \
 
 //numero di file che il server può contenere attraverso la tabella hash (dato da prendere da config.txt) [eliminare]
 #define NUMFILE 10
@@ -108,12 +121,12 @@ int unlockFileServer(const char *pathname, ServerStorage *storage, int clientFd)
 size_t getSizeFileByteServer(const char pathname[], ServerStorage *storage, int clientFd);
 
 int fillStructFile(File *serverFileF, ServerStorage *storage, const char *dirname);
-static File *createFile(const char *pathname, int clientFd);
-void stampaHash(icl_hash_t *hashPtr);
+//static File *createFile(const char *pathname, int clientFd);
+void stampaHash(ServerStorage *storage);
 void freeFileData(void *serverFile);
-static int copyFileToDirHandler(File *serverFile, const char dirname[]);
+//static int copyFileToDirHandler(File *serverFile, const char dirname[]);
 int createReadNFiles(int N, ServerStorage *storage, int clientFd, unsigned long long int *bytesLetti);
-static int creatFileAndCopy(File *serverFile);
+//static int creatFileAndCopy(File *serverFile);
 int gestioneApi_removeClientInfoAPI(int fdAcceptF);
 int removeClientInfo(ServerStorage *storage, int clientFd);
 void freeStorage(ServerStorage *storage);

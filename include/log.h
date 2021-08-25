@@ -19,5 +19,6 @@
 
 
 void writeLogFd_N_Date(FILE *logFile, int clientFd);
+char *getCurrentTime();
 
 #endif

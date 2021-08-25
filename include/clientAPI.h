@@ -2,14 +2,18 @@
 #define clientAPI_h
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 #include "../utils/util.h"
 #include "../utils/conn.h"
-#include "../utils/utilsPathname.c"
 #include "../utils/flagsAPI.h"
+
 
 
 //in caso di errore della API, il server invia l'errno; altrimenti invia questa flag
 #define API_SUCCESS 0
+
+extern bool EN_STDOUT; //indica se stampare se abilitare -p
+#define STAMPA_STDOUT(val) if(EN_STDOUT == true) {val;}
 
 int FD_SOCK;
 char SOCKNAME[MAX_BYTES_SOCKNAME];
@@ -28,5 +32,6 @@ int removeFile(const char *pathname);
 int isPathPresent(const char *pathname);
 size_t getSizeFileByte(const char *pathname);
 int removeClientInfoAPI();
+int copyFileToDir(const char *pathname, const char *dirname);
 
 #endif
