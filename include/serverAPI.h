@@ -120,12 +120,12 @@ int lockFileServer(const char *pathname, ServerStorage *storage, int clientFd);
 int unlockFileServer(const char *pathname, ServerStorage *storage, int clientFd);
 size_t getSizeFileByteServer(const char pathname[], ServerStorage *storage, int clientFd);
 
-int fillStructFile(File *serverFileF, ServerStorage *storage, const char *dirname);
+//static int fillStructFile(File *serverFileF, ServerStorage *storage, const char *dirname);
 //static File *createFile(const char *pathname, int clientFd);
 void stampaHash(ServerStorage *storage);
 void freeFileData(void *serverFile);
 //static int copyFileToDirHandler(File *serverFile, const char dirname[]);
-int createReadNFiles(int N, ServerStorage *storage, int clientFd, unsigned long long int *bytesLetti);
+//int createReadNFiles(int N, ServerStorage *storage, int clientFd, unsigned long long int *bytesLetti);
 //static int creatFileAndCopy(File *serverFile);
 int gestioneApi_removeClientInfoAPI(int fdAcceptF);
 int removeClientInfo(ServerStorage *storage, int clientFd);

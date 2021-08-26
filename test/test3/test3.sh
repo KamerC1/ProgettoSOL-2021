@@ -9,7 +9,7 @@ sockFile=cs_sock
 configFile=test/config/test3.txt
 
 echo -e "${RED}Avvio il server${DEFAULT_COLOR}"
-valgrind --leak-check=full $serverDir $configFile &
+$serverDir $configFile &
 SERVER_PID=$!
 export SERVER_PID
 
@@ -52,10 +52,11 @@ echo -e "${RED}Lancio sengale: SIGINT${DEFAULT_COLOR}"
 kill -s SIGINT $SERVER_PID
 wait $SERVER_PID
 
-
 for((i=0;i<n;++i)); do
     wait ${PID[i]}
 done
+
+echo -e "\n${RED}ATTENZIONE: il calcolo delle statistiche potrebbe richiedere un po' di tempo${DEFAULT_COLOR}\n"
 
 #elimino la dir con la copia dei file
 rm -r $fileDir

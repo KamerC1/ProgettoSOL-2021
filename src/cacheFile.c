@@ -121,34 +121,20 @@ void FIFO_ReplacementAlg(ServerStorage *storage, NodoQiPtr_File *testaPtrF, Nodo
     NULL_SYSCALL(serverFile, "FIFO_ReplacementAlg: icl_hash_find")
 
 
-    //attendo che nessuno acceda al file da eliminare
-//    LOCK(&(serverFile->fileLock.mutexFile))
-//    rwLock_startWriting(&serverFile->fileLock);
-//    UNLOCK(&(serverFile->fileLock.mutexFile))
-
-
-
-
     size_t temp_sizeFileByte = serverFile->sizeFileByte;
 
     assert(serverFile->path != NULL);
-
     SYSCALL(icl_hash_delete(storage->fileSystem, (void *) pathnameFile2Remove, free, NULL), "FIFO_ReplacementAlg: icl_hash_delete")
 
     pushFile(testaPtrF, codaPtrF, serverFile);
-
     assert(serverFile != NULL);
 
-
-//    END_WRITE_LOCK
 
     free(pathnameFile2Remove);
 
     storage->currentStorageFiles--;
     storage->currentStorageBytes -= temp_sizeFileByte;
     storage->numVictims++;
-
-
 }
 
 int copyFile2Dir(NodoQiPtr_File *testaPtrF, NodoQiPtr_File *codaPtrF, const char *dirname)
