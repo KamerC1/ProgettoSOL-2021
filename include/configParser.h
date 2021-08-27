@@ -24,9 +24,6 @@ typedef struct configFile_t ConfigFile_t;
 #define LOGFILE "LOGFILE"
 #define REPLACEMENTE_ALG "REPLACEMENTE_ALG"
 
-#define FIFO 0
-#define LRU 1
-
 #define DEFAULT_FILE 100
 #define DEFAULT_BYTES 2048
 #define DEFAULT_WORKER 10

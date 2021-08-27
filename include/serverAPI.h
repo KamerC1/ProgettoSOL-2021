@@ -25,6 +25,9 @@ struct file {
     NodoQi *fdLock_CodaPtr; //fd in attesa di acquisire la lock (è una coda)
 
     RwLock_t fileLock; //struttura dati per gestire la concorrenza
+
+    time_t LRU_time; //tempo per implementare l'algoritmo di sostituizione: LRU
+    size_t accessFile_count; //conta il numero di accessi al file (serve per LFU e MFU)
 };
 typedef struct file File;
 
@@ -35,7 +38,7 @@ struct serverStorage
     size_t currentStorageBytes; //numero di bytes attualmente usati nel server
     size_t currentStorageFiles; //numero di files attualmente memorizzati nel server
 
-    short fileReplacementAlg; //0->FIFO
+    short fileReplacementAlg; //0->FIFO, 1->LRU, 2->LFU
     //Struttura dati per gestire la politica di rimozione di tipo FIFO (contiene i file attualmente aperti)
     NodoQi_string *FIFOtestaPtr;
     NodoQi_string *FIFOcodaPtr;

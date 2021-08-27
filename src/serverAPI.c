@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <string.h>
 #include <linux/limits.h>
+#include <time.h>
 #include <libgen.h>
 
 #include "../utils/util.h"
@@ -94,6 +95,11 @@ int openFileServer(const char *pathname, int flags, ServerStorage *storage, int 
             START_WRITE_LOCK
             CSA(icl_hash_find(hashPtrF, (void *) pathname) == NULL, "O_OPEN: icl_hash_find", ENOENT, ESOP("closeFileServer", 0); WAKES_UP_REMOVE; END_WRITE_LOCK)
 
+            serverFile->LRU_time = time(NULL);
+            SYSCALL(serverFile->LRU_time, "time(NULL)")
+
+            serverFile->accessFile_count++;
+
             //se clientFd ha già aperto la lista, non si fa niente
             if(findSortedList(serverFile->fdOpen_SLPtr, clientFd) != 0)
             {
@@ -152,6 +158,11 @@ int openFileServer(const char *pathname, int flags, ServerStorage *storage, int 
 
             START_WRITE_LOCK
             CSA(icl_hash_find(hashPtrF, (void *) pathname) == NULL, "O_LOCK: icl_hash_find", ENOENT, ESOP("closeFileServer", 0); WAKES_UP_REMOVE; END_WRITE_LOCK)
+
+            serverFile->LRU_time = time(NULL);
+            SYSCALL(serverFile->LRU_time, "time(NULL)")
+
+            serverFile->accessFile_count++;
 
             //CSA(findSortedList(serverFile->fdOpen_SLPtr, clientFd) == 0, "O_LOCK: file già aperto dal client", EPERM, END_WRITE_LOCK)
             //Apro il file se questo non è presente
@@ -246,7 +257,11 @@ static File *createFile(const char *pathname, int clientFd) {
     serverFile->fdLock_TestaPtr = NULL;
     serverFile->fdLock_CodaPtr = NULL;
 
+    //Inserimento Time LRU
+    serverFile->LRU_time = time(NULL);
+    SYSCALL(serverFile->LRU_time, "time(NULL)")
 
+    serverFile->accessFile_count = 0;
 
     return serverFile;
 }
@@ -291,6 +306,12 @@ long readFileServer(const char *pathname, char **buf, size_t *size, ServerStorag
     CSA(serverFile == NULL, "il file non è presente nella hash table", ENOENT, ESOP("readFile", 0); WAKES_UP_REMOVE; UNLOCK(&(storage->globalMutex)))
 
     START_READ_LOCK
+
+    serverFile->LRU_time = time(NULL);
+    SYSCALL(serverFile->LRU_time, "time(NULL)")
+
+    serverFile->accessFile_count++;
+
 
     IS_FILE_LOCKED(END_READ_LOCK)
 
@@ -363,6 +384,11 @@ long copyFileToDirServer(const char *pathname, const char *dirname, ServerStorag
 
     START_WRITE_LOCK //non posso usare START_READ_LOCK perché uso "chdir"
     CSA(icl_hash_find(hashPtrF, (void *) pathname) == NULL, "il file non è presente nella hash table", ENOENT, ESOP("copyFileToDirServer", 0); WAKES_UP_REMOVE; UNLOCK(&(storage->globalMutex)))
+
+    serverFile->LRU_time = time(NULL);
+    SYSCALL(serverFile->LRU_time, "time(NULL)")
+
+    serverFile->accessFile_count++;
 
     IS_FILE_LOCKED(END_WRITE_LOCK)
 
@@ -590,6 +616,11 @@ long writeFileServer(const char *pathname, const char *dirname, ServerStorage *s
     rwLock_startWriting(&serverFile->fileLock);
     UNLOCK(&(serverFile->fileLock.mutexFile))
 
+    serverFile->LRU_time = time(NULL);
+    SYSCALL(serverFile->LRU_time, "time(NULL)")
+
+    serverFile->accessFile_count++;
+
     IS_FILE_LOCKED(END_WRITE_LOCK; UNLOCK(&(storage->globalMutex)))
 
     CSA(findSortedList(serverFile->fdOpen_SLPtr, clientFd) == -1,
@@ -736,6 +767,11 @@ int appendToFileServer(const char *pathname, char *buf, size_t size, const char 
     rwLock_startWriting(&serverFile->fileLock);
     UNLOCK(&(serverFile->fileLock.mutexFile))
 
+    serverFile->LRU_time = time(NULL);
+    SYSCALL(serverFile->LRU_time, "time(NULL)")
+
+    serverFile->accessFile_count++;
+
     IS_FILE_LOCKED(END_WRITE_LOCK; UNLOCK(&(storage->globalMutex)))
 
     CSA(findSortedList(serverFile->fdOpen_SLPtr, clientFd) == -1, "File non aperto da clientFd", EPERM, ESOP("appendToFile", 0); WAKES_UP_REMOVE; END_WRITE_LOCK; UNLOCK(&(storage->globalMutex)))
@@ -836,6 +872,10 @@ int lockFileServer(const char *pathname, ServerStorage *storage, int clientFd)
     //Il file potrebbe essere stato eliminato dalla cache
     CSA(icl_hash_find(hashPtrF, (void *) pathname) == NULL, "lockFileServer: icl_hash_find", ENOENT, ESOP("closeFileServer", 0); WAKES_UP_REMOVE; END_WRITE_LOCK)
 
+    serverFile->LRU_time = time(NULL);
+    SYSCALL(serverFile->LRU_time, "time(NULL)")
+
+    serverFile->accessFile_count++;
 
     CSA(findSortedList(serverFile->fdOpen_SLPtr, clientFd) == -1,
         "lockFileServer: il file non è stato aperto da clientFd", EPERM, ESOP("lockFileServer", 0); WAKES_UP_REMOVE; END_WRITE_LOCK)
@@ -885,6 +925,11 @@ int unlockFileServer(const char *pathname, ServerStorage *storage, int clientFd)
     START_WRITE_LOCK
     //Il file potrebbe essere stato eliminato dalla cache
     CSA(icl_hash_find(hashPtrF, (void *) pathname) == NULL, "unlockFileServer: icl_hash_find", ENOENT, ESOP("closeFileServer", 0); WAKES_UP_REMOVE; END_WRITE_LOCK)
+
+    serverFile->LRU_time = time(NULL);
+    SYSCALL(serverFile->LRU_time, "time(NULL)")
+
+    serverFile->accessFile_count++;
 
     CSA(findSortedList(serverFile->fdOpen_SLPtr, clientFd) == -1,
         "unlockFileServer: il file non è stato aperto da clientFd", EPERM, ESOP("unlockFileServer", 0); WAKES_UP_REMOVE; END_WRITE_LOCK)
@@ -939,6 +984,10 @@ int closeFileServer(const char *pathname, ServerStorage *storage, int clientFd) 
     //Il file potrebbe essere stato eliminato dalla cache
     CSA(icl_hash_find(hashPtrF, (void *) pathname) == NULL, "\n\n\n\n\n\n\n\n\n  CLOSE closeFileServer: icl_hash_find\n\n\n\n\n\n\n\n\n", ENOENT, ESOP("closeFileServer", 0); WAKES_UP_REMOVE; END_WRITE_LOCK)
 
+    serverFile->LRU_time = time(NULL);
+    SYSCALL(serverFile->LRU_time, "time(NULL)")
+
+    serverFile->accessFile_count++;
 
     //se fd ha aperto il file, questo'ultimo viene chiuso
     CSA(deleteSortedList(&(serverFile->fdOpen_SLPtr), clientFd) == -1, "CLOSE: client non ha aperto il file", EPERM, ESOP("closeFileServer", 0); WAKES_UP_REMOVE; END_WRITE_LOCK)
@@ -1058,6 +1107,11 @@ int isPathPresentServer(const char pathname[], ServerStorage *storage, int clien
     }
     START_READ_LOCK
 
+    serverFile->LRU_time = time(NULL);
+    SYSCALL(serverFile->LRU_time, "time(NULL)")
+
+    serverFile->accessFile_count++;
+
     if(findSortedList(serverFile->fdOpen_SLPtr, clientFd) == -1)
     {
         storage->isHandlingAPI = false;
@@ -1107,6 +1161,11 @@ size_t getSizeFileByteServer(const char pathname[], ServerStorage *storage, int 
     CSA(serverFile == NULL, "il file non è presente nella hash table", ENOENT, ESOP("getSizeFileByte", 0); UNLOCK(&(storage->globalMutex)))
 
     START_READ_LOCK
+
+    serverFile->LRU_time = time(NULL);
+    SYSCALL(serverFile->LRU_time, "time(NULL)")
+
+    serverFile->accessFile_count++;
 
     IS_FILE_LOCKED(END_READ_LOCK)
 
@@ -1258,12 +1317,21 @@ void stampaHash(ServerStorage *storage)
 //            printf("Path: %s\n", newFile->path);
 //            printf("%d: cmp tra %s-%s\n", strcmp(key, newFile->path), key, newFile->path);
             printf("FIle name: %s\n", basename(newFile->path));
-            printf("\nfileContent:\n%s\n\n", newFile->fileContent);
-            printf("sizeFileByte: %ld\n", newFile->sizeFileByte);
+            printf("accessFile_count: %ld\n", newFile->accessFile_count);
+
+//            char buff[20];
+//            struct tm * timeinfo = gmtime(&(newFile->LRU_time));
+//            strftime(buff, sizeof(buff), "%b %d %H:%M:%S", timeinfo);
+//            printf("Time %s\n",buff);
+
+
+
+//            printf("\nfileContent:\n%s\n\n", newFile->fileContent);
+//            printf("sizeFileByte: %ld\n", newFile->sizeFileByte);
             stampaSortedList(newFile->fdOpen_SLPtr);
             puts("");
-            printf("Lock: %d\n", newFile->lockFd);
-            stampa(newFile->fdLock_TestaPtr);
+//            printf("Lock: %d\n", newFile->lockFd);
+//            stampa(newFile->fdLock_TestaPtr);
 
             //LOCK
 //            puts("");

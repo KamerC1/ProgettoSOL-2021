@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <stdbool.h>
 #include "../include/configParser.h"
+#include "../utils/flagsReplacementAlg.h"
 
 #include "../utils/util.h"
 
@@ -200,6 +201,18 @@ int findKey(char key[], char value[], ConfigFile_t *configFile)
         {
             configFile->fileReplacementAlg = LRU;
         }
+        else if(strcmp(value, "MRU") == 0)
+        {
+            configFile->fileReplacementAlg = MRU;
+        }
+        else if(strcmp(value, "LFU") == 0)
+        {
+            configFile->fileReplacementAlg = LFU;
+        }
+        else if(strcmp(value, "MFU") == 0)
+        {
+            configFile->fileReplacementAlg = MFU;
+        }
     }
 
     return 0;
@@ -245,159 +258,3 @@ bool containsChar(char string[], char value)
 
     return false;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-////ritorna la posizione della prima occorrenza del delimitatore "delim" in "string"
-////ritorna -1 se non è stato trovato
-//int getFirstOccurence(char string[], char delim)
-//{
-//    const char *posPtr = strchr(string, delim);
-//    if(posPtr != NULL)
-//    {
-//        int pos = posPtr - string;
-//        string[pos] = '\0';
-//        printf("Pos: %d\n", pos);
-//        printf("Strlen: %ld\n", strlen(string));
-//
-//        return pos;
-//    }
-//
-//    return -1;
-//}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-//void deleteSpace(char string[])
-//{
-//    size_t stringLen = strlen(string);
-//    char noSpaceString[stringLen+1];
-//
-//    for(int i = 0; i < stringLen; i++)
-//    {
-//        if(isNumber(string[i]) == )
-//    }
-//}
-
-//const char *posPtr = strchr(valueToken, '\n');
-//if(posPtr != NULL)
-//{
-//int pos = posPtr - valueToken;
-//valueToken[pos] = '\0';
-//printf("Pos: %d\n", pos);
-//printf("Strlen: %ld\n", strlen(valueToken));
-//}
-
-//int lineParsing(char line[])
-//{
-//    puts("Nuovo giro");
-//
-//    unsigned short i = 0;
-//    char *savePtr;
-//    char *keyToken = strtok_r(line, "=", &savePtr);
-//
-//    if(keyToken == NULL)
-//    {
-//        return -1;
-//    }
-//
-//    char *valueToken = strtok_r(NULL, ";", &savePtr);
-//    if(valueToken == NULL)
-//    {
-//        return -1;
-//    }
-//
-//    //elimina tab o spazio da keyToken
-//    int spacePosition = getFirstOccurence(keyToken, ' ');
-//    int tabPosition = getFirstOccurence(keyToken, '\t');
-//
-//    if(spacePosition >= 0)
-//        keyToken[spacePosition] = '\0';
-//    else if(tabPosition >= 0)
-//        keyToken[tabPosition] = '\0';
-//
-//    printf("keyToken:-%s-\n", keyToken);
-//
-//
-//    //elimina tab o spazio da valueToken
-//    spacePosition = getFirstOccurence(valueToken, ' ');
-//    tabPosition = getFirstOccurence(valueToken, '\t');
-//
-//    if(spacePosition >= 0)
-//    {
-//        puts("ciao space");
-//        valueToken[spacePosition] = '\0';
-//    }
-//    if(tabPosition >= 0)
-//    {
-//        puts("ciao tab");
-//        valueToken[tabPosition] = '\0';
-//    }
-//
-//
-//    printf("valueToken:-%s-\n", valueToken);
-//
-////    if(strcmp(token, "MAX_FILE") == 0)
-////    {
-////        long value = isNumber(token)
-////    }
-//
-//    return 0;
-//}
-
-
-//printf("valueToken:-%s-\n", valueToken);
-//
-//if(strcmp(keyToken, "MAX_FILE") == 0)
-//{
-//long value = isNumber(valueToken);
-//CS(value == -1, "isNumber", errno);
-//printf("KEI INT: %ld\n", value);
-//}

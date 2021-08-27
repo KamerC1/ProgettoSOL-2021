@@ -18,6 +18,8 @@ void FIFO_ReplacementAlg(ServerStorage *storage, NodoQiPtr_File *testaPtrF, Nodo
 void stampaStorage(ServerStorage *storage);
 void addBytes2Storage(File *serverFile, ServerStorage *storage, NodoQiPtr_File *testaPtrF, NodoQiPtr_File *codaPtrF);
 int copyFile2Dir(NodoQiPtr_File *testaPtrF, NodoQiPtr_File *codaPtrF, const char *dirname);
-//int wrtieFile(File *serverFile);
-
+void LRU_ReplacementAlg(ServerStorage *storage, NodoQiPtr_File *testaPtrF, NodoQiPtr_File *codaPtrF, File *callerFile);
+void LFU_ReplacementAlg(ServerStorage *storage, NodoQiPtr_File *testaPtrF, NodoQiPtr_File *codaPtrF, File *callerFile);
+void MFU_ReplacementAlg(ServerStorage *storage, NodoQiPtr_File *testaPtrF, NodoQiPtr_File *codaPtrF, File *callerFile);
+void MRU_ReplacementAlg(ServerStorage *storage, NodoQiPtr_File *testaPtrF, NodoQiPtr_File *codaPtrF, File *callerFile);
 #endif

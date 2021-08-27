@@ -10,15 +10,19 @@
 #include "../include/cacheFile.h"
 #include "../include/serverAPI.h"
 #include "../strutture_dati/hash/icl_hash.h"
+#include "../utils/flagsReplacementAlg.h"
 
 static int wrtieFile(File *serverFile);
+static File *minTime(File *firstFile, File *secondFile);
+static File *maxTime(File *firstFile, File *secondFile);
+
 
 //Crea lo storage e lo inizializza
 //ritorna un puntatore alla struttura dati, NULL altrimenti (errno è impostato di conseguenza)
 ServerStorage *createStorage(size_t maxStorageBytesF, size_t maxStorageFilesF, short fileReplacementAlgF)
 {
     CSN(maxStorageBytesF <= 0 || maxStorageFilesF <= 0, "createStorage: argomenti sbagliati", EINVAL)
-    CSN(fileReplacementAlgF != 0, "createStorage: fileReplacementAlgF != 0", EINVAL)
+    CSN(fileReplacementAlgF < 0 || fileReplacementAlgF > 4, "createStorage: fileReplacementAlgF != 0", EINVAL)
 
 
     ServerStorage *storage;
@@ -63,7 +67,16 @@ void addFile2Storage(File *serverFile, ServerStorage *storage, NodoQiPtr_File *t
 
     if(storage->currentStorageFiles >= storage->maxStorageFiles)
     {
-        FIFO_ReplacementAlg(storage, testaPtrF, codaPtrF, serverFile->path);
+        if(storage->fileReplacementAlg == FIFO)
+            FIFO_ReplacementAlg(storage, testaPtrF, codaPtrF, serverFile->path);
+        else if(storage->fileReplacementAlg == LRU)
+            LRU_ReplacementAlg(storage, testaPtrF, codaPtrF, serverFile);
+        else if(storage->fileReplacementAlg == LFU)
+            LFU_ReplacementAlg(storage, testaPtrF, codaPtrF, serverFile);
+        else if(storage->fileReplacementAlg == MFU)
+            MFU_ReplacementAlg(storage, testaPtrF, codaPtrF, serverFile);
+        else if(storage->fileReplacementAlg == MRU)
+            MRU_ReplacementAlg(storage, testaPtrF, codaPtrF, serverFile);
     }
 
     //Aggiornamento storage
@@ -71,7 +84,8 @@ void addFile2Storage(File *serverFile, ServerStorage *storage, NodoQiPtr_File *t
     storage->maxFileStored++;
 
     //aggiornamento lista dei "file creati (politica FIFO)"
-    pushStringa(&(storage->FIFOtestaPtr), &(storage->FIFOcodaPtr), serverFile->path);
+    if(storage->fileReplacementAlg == 0)
+        pushStringa(&(storage->FIFOtestaPtr), &(storage->FIFOcodaPtr), serverFile->path);
 }
 
 //aggiorna la dimensione dello storage quando si scrive su un file - modifica solo lo spazio.
@@ -86,7 +100,16 @@ void addBytes2Storage(File *serverFile, ServerStorage *storage, NodoQiPtr_File *
     size_t possibleCurrentBytes = storage->currentStorageBytes + serverFile->sizeFileByte;
     while(possibleCurrentBytes > storage->maxStorageBytes)
     {
-        FIFO_ReplacementAlg(storage, testaPtrF, codaPtrF, serverFile->path);
+        if(storage->fileReplacementAlg == FIFO)
+            FIFO_ReplacementAlg(storage, testaPtrF, codaPtrF, serverFile->path);
+        else if(storage->fileReplacementAlg == LRU)
+            LRU_ReplacementAlg(storage, testaPtrF, codaPtrF, serverFile);
+        else if(storage->fileReplacementAlg == LFU)
+            LFU_ReplacementAlg(storage, testaPtrF, codaPtrF, serverFile);
+        else if(storage->fileReplacementAlg == MFU)
+            MFU_ReplacementAlg(storage, testaPtrF, codaPtrF, serverFile);
+        else if(storage->fileReplacementAlg == MRU)
+            MRU_ReplacementAlg(storage, testaPtrF, codaPtrF, serverFile);
         possibleCurrentBytes = storage->currentStorageBytes + serverFile->sizeFileByte;
     }
 
@@ -130,6 +153,174 @@ void FIFO_ReplacementAlg(ServerStorage *storage, NodoQiPtr_File *testaPtrF, Nodo
     storage->currentStorageFiles--;
     storage->currentStorageBytes -= temp_sizeFileByte;
     storage->numVictims++;
+}
+
+void LRU_ReplacementAlg(ServerStorage *storage, NodoQiPtr_File *testaPtrF, NodoQiPtr_File *codaPtrF, File *callerFile)
+{
+    assert(storage != NULL);
+
+    //k viene inizializzato a 0 in icl_hash_foreach
+    int k;
+    icl_entry_t *entry;
+    char *key;
+    File *newFile;
+    File *file2Remove = NULL;
+    icl_hash_foreach(storage->fileSystem, k, entry, key, newFile)
+    {
+        //primo elemento incontrato
+        if(file2Remove == NULL)
+        {
+            //L'elemento da eliminare non deve essere il chiamante
+            if(newFile != callerFile)
+                file2Remove = newFile;
+        }
+        else
+        {
+            file2Remove = minTime(file2Remove, newFile);
+        }
+    }
+
+    assert(file2Remove != NULL);
+    assert(file2Remove != callerFile);
+
+    size_t temp_sizeFileByte = file2Remove->sizeFileByte;
+    SYSCALL(icl_hash_delete(storage->fileSystem, (void *) file2Remove->path, free, NULL), "FIFO_ReplacementAlg: icl_hash_delete")
+
+    pushFile(testaPtrF, codaPtrF, file2Remove);
+
+    storage->currentStorageFiles--;
+    storage->currentStorageBytes -= temp_sizeFileByte;
+    storage->numVictims++;
+}
+
+void MRU_ReplacementAlg(ServerStorage *storage, NodoQiPtr_File *testaPtrF, NodoQiPtr_File *codaPtrF, File *callerFile)
+{
+    assert(storage != NULL);
+
+    //k viene inizializzato a 0 in icl_hash_foreach
+    int k;
+    icl_entry_t *entry;
+    char *key;
+    File *newFile;
+    File *file2Remove = NULL;
+    icl_hash_foreach(storage->fileSystem, k, entry, key, newFile)
+    {
+        //primo elemento incontrato
+        if(file2Remove == NULL)
+        {
+            //L'elemento da eliminare non deve essere il chiamante
+            if(newFile != callerFile)
+                file2Remove = newFile;
+        }
+        else
+        {
+            file2Remove = maxTime(file2Remove, newFile);
+        }
+    }
+
+    assert(file2Remove != NULL);
+    assert(file2Remove != callerFile);
+
+    size_t temp_sizeFileByte = file2Remove->sizeFileByte;
+    SYSCALL(icl_hash_delete(storage->fileSystem, (void *) file2Remove->path, free, NULL), "FIFO_ReplacementAlg: icl_hash_delete")
+
+    pushFile(testaPtrF, codaPtrF, file2Remove);
+
+    storage->currentStorageFiles--;
+    storage->currentStorageBytes -= temp_sizeFileByte;
+    storage->numVictims++;
+}
+
+void LFU_ReplacementAlg(ServerStorage *storage, NodoQiPtr_File *testaPtrF, NodoQiPtr_File *codaPtrF, File *callerFile)
+{
+    assert(storage != NULL);
+
+    //k viene inizializzato a 0 in icl_hash_foreach
+    int k;
+    icl_entry_t *entry;
+    char *key;
+    File *newFile;
+    File *file2Remove = NULL;
+    icl_hash_foreach(storage->fileSystem, k, entry, key, newFile)
+    {
+        //L'elemento da eliminare non deve essere il chiamante
+        if(newFile != callerFile)
+        {
+            if(file2Remove == NULL)
+                file2Remove = newFile;
+
+            if(newFile->accessFile_count <= file2Remove->accessFile_count)
+                file2Remove = newFile;
+        }
+    }
+
+    assert(file2Remove != NULL);
+    assert(file2Remove != callerFile);
+
+    size_t temp_sizeFileByte = file2Remove->sizeFileByte;
+    SYSCALL(icl_hash_delete(storage->fileSystem, (void *) file2Remove->path, free, NULL), "FIFO_ReplacementAlg: icl_hash_delete")
+
+    pushFile(testaPtrF, codaPtrF, file2Remove);
+
+    storage->currentStorageFiles--;
+    storage->currentStorageBytes -= temp_sizeFileByte;
+    storage->numVictims++;
+}
+
+void MFU_ReplacementAlg(ServerStorage *storage, NodoQiPtr_File *testaPtrF, NodoQiPtr_File *codaPtrF, File *callerFile)
+{
+    assert(storage != NULL);
+
+    //k viene inizializzato a 0 in icl_hash_foreach
+    int k;
+    icl_entry_t *entry;
+    char *key;
+    File *newFile;
+    File *file2Remove = NULL;
+    icl_hash_foreach(storage->fileSystem, k, entry, key, newFile)
+    {
+        //L'elemento da eliminare non deve essere il chiamante
+        if(newFile != callerFile)
+        {
+            if(file2Remove == NULL)
+                file2Remove = newFile;
+
+            if(newFile->accessFile_count >= file2Remove->accessFile_count)
+                file2Remove = newFile;
+        }
+    }
+
+    assert(file2Remove != NULL);
+    assert(file2Remove != callerFile);
+
+    size_t temp_sizeFileByte = file2Remove->sizeFileByte;
+    SYSCALL(icl_hash_delete(storage->fileSystem, (void *) file2Remove->path, free, NULL), "FIFO_ReplacementAlg: icl_hash_delete")
+
+    pushFile(testaPtrF, codaPtrF, file2Remove);
+
+    storage->currentStorageFiles--;
+    storage->currentStorageBytes -= temp_sizeFileByte;
+    storage->numVictims++;
+}
+
+//restitusce il puntatore al file più "anziano" tra firstFile e secondFile (funzione di supporto per minTime)
+static File *minTime(File *firstFile, File *secondFile)
+{
+    if(difftime(firstFile->LRU_time, secondFile->LRU_time) <= 0)
+    {
+        return firstFile;
+    } else
+        return secondFile;
+}
+
+//restitusce il puntatore al file più recente tra firstFile e secondFile (funzione di supporto per minTime)
+static File *maxTime(File *firstFile, File *secondFile)
+{
+    if(difftime(firstFile->LRU_time, secondFile->LRU_time) >= 0)
+    {
+        return firstFile;
+    } else
+        return secondFile;
 }
 
 //Copia il file espulso in dirname

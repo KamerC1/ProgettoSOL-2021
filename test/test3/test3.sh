@@ -43,9 +43,7 @@ while [ $(date +%s) -lt $endTime ]; do
     touch $fileCopy
     cp test/test3/file/Ciambella.txt $fileCopy
 
-    $clientDir -f $sockFile -W $fileDir/Ciambella$i.txt -a $fileDir/Ciambella$i.txt,"CIAO" -l $fileDir/Ciambella$i.txt  -r $fileDir/Ciambella$i.txt -d $readDestination -u $fileDir/Ciambella$i.txt &
-    (( n++ ))
-    $clientDir -f $sockFile -R -$readDestination &
+    $clientDir -f $sockFile -W $fileDir/Ciambella$i.txt -a $fileDir/Ciambella$i.txt,"CIAO" -l $fileDir/Ciambella$i.txt  -r $fileDir/Ciambella$i.txt -d $readDestination -c $fileDir/Ciambella$i.txt &
     (( n++ ))
     (( i++ ))
 done

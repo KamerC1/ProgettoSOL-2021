@@ -133,7 +133,7 @@ int main(int argc, char *argv[])
     SYSCALL(close(pipeW2M[WRITE_END]), "Errore: close(pipeW2M[WRITE_END])")
     SYSCALL(close(pipeW2M[READ_END]), "Errore: close(pipeW2M[READ_END])")
 
-//    stampaHash(storage);
+    //stampaHash(storage);
     stampaStorage(storage);
 
     FCLOSE(storage->logFile)
@@ -485,7 +485,7 @@ void gestioneRichiesteAPI(int operazioneAPI, int fdAcceptF)
             break;
     }
 
-//    stampaHash(storage);
+    //stampaHash(storage);
 //    stampaStorage(storage);
 
 }
