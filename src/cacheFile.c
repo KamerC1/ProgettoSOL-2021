@@ -11,12 +11,14 @@
 #include "../include/serverAPI.h"
 #include "../strutture_dati/hash/icl_hash.h"
 
-//ritorna NULL in caso di fallimento
+static int wrtieFile(File *serverFile);
+
+//Crea lo storage e lo inizializza
+//ritorna un puntatore alla struttura dati, NULL altrimenti (errno è impostato di conseguenza)
 ServerStorage *createStorage(size_t maxStorageBytesF, size_t maxStorageFilesF, short fileReplacementAlgF)
 {
     CSN(maxStorageBytesF <= 0 || maxStorageFilesF <= 0, "createStorage: argomenti sbagliati", EINVAL)
     CSN(fileReplacementAlgF != 0, "createStorage: fileReplacementAlgF != 0", EINVAL)
-
 
 
     ServerStorage *storage;
@@ -51,8 +53,8 @@ ServerStorage *createStorage(size_t maxStorageBytesF, size_t maxStorageFilesF, s
     return storage;
 }
 
-//aggiorana la dimensione dello storage, sia lo spazio che i numero dei file, quando viene aggiunto un nuovo file.
-// Se necessario, elimina i file già presenti
+//Quando viene aggiunto un nuovo file, aggiorana la dimensione dello storage (sia lo spazio che il numero dei file)
+//Se necessario, elimina i file già presenti
 //se fallisce, termina perché il file system rimarrebbe in uno stato incosistente
 void addFile2Storage(File *serverFile, ServerStorage *storage, NodoQiPtr_File *testaPtrF, NodoQiPtr_File *codaPtrF)
 {
@@ -62,7 +64,6 @@ void addFile2Storage(File *serverFile, ServerStorage *storage, NodoQiPtr_File *t
 
     if(storage->currentStorageFiles >= storage->maxStorageFiles)
     {
-        puts("RIMPIAZZZOOOOOOOOOOOOOOOO FILES"); //[ELIMINARE]
         FIFO_ReplacementAlg(storage, testaPtrF, codaPtrF, serverFile->path);
     }
 
@@ -75,7 +76,7 @@ void addFile2Storage(File *serverFile, ServerStorage *storage, NodoQiPtr_File *t
 }
 
 //aggiorna la dimensione dello storage quando si scrive su un file - modifica solo lo spazio.
-// Se necessario, elimina i file già presenti
+//Se necessario, elimina i file già presenti
 //se fallisce, termina perché il file system rimarrebbe in uno stato incosistente
 void addBytes2Storage(File *serverFile, ServerStorage *storage, NodoQiPtr_File *testaPtrF, NodoQiPtr_File *codaPtrF)
 {
@@ -86,11 +87,6 @@ void addBytes2Storage(File *serverFile, ServerStorage *storage, NodoQiPtr_File *
     size_t possibleCurrentBytes = storage->currentStorageBytes + serverFile->sizeFileByte;
     while(possibleCurrentBytes > storage->maxStorageBytes)
     {
-        puts("RIMPIAZZOOOOOOOOOOOOOOOOOOo BYTES"); //[ELIMINARE]
-
-//        printf("\n\n\n\n\n\n\nSERVERFILE PRIMA: %s\n\n\n\n\n\n\n", serverFile->path);
-
-
         FIFO_ReplacementAlg(storage, testaPtrF, codaPtrF, serverFile->path);
         possibleCurrentBytes = storage->currentStorageBytes + serverFile->sizeFileByte;
     }
@@ -137,6 +133,8 @@ void FIFO_ReplacementAlg(ServerStorage *storage, NodoQiPtr_File *testaPtrF, Nodo
     storage->numVictims++;
 }
 
+//Copia il file espulso in dirname
+//Ritorna 0 in caso di successo, .1 altrimenti
 int copyFile2Dir(NodoQiPtr_File *testaPtrF, NodoQiPtr_File *codaPtrF, const char *dirname)
 {
     //==Calcola il path dove lavora il processo==
@@ -172,7 +170,7 @@ int copyFile2Dir(NodoQiPtr_File *testaPtrF, NodoQiPtr_File *codaPtrF, const char
 }
 
 //Crea un file vi copia il contenuto di serverFile - funzione di supporto per copyFile2Dir
-int wrtieFile(File *serverFile)
+static int wrtieFile(File *serverFile)
 {
     assert(serverFile != NULL);
 

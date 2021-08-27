@@ -9,65 +9,8 @@
 
 #include "../utils/util.h"
 
-//int main(int argc, char *argv[])
-//{
-//    if(argc <= 1)
-//    {
-//        puts("Arg mancante");
-//        exit(EXIT_FAILURE);
-//    }
-//
-//    ConfigFile_t *configStruct = malloc(sizeof(ConfigFile_t));
-//    NULL_SYSCALL(configStruct, "configParser: malloc")
-//    setDefaultConfigFile(configStruct);
-//
-//    //il file, anche se esiste già, viene sovrascritto perché il file nel server potrebbe essere cambiato
-//    FILE *configFile = fopen(argv[1], "r");
-//    CS(configFile == NULL, "creatFileAndCopy: fopen()", errno)
-//
-//
-//
-//    char *fileLine = NULL;
-//    size_t n = 0;
-//    size_t lineLength = 0;
-//    errno = 0;
-//    while ((lineLength = getline(&fileLine, &n, configFile) != -1))
-//    {
-//        CSA(errno != 0, "getline", errno, if(fileLine != NULL) free(fileLine))
-//
-//        if(isalpha(fileLine[0]) == 0)
-//        {
-//            n = 0;
-//            free(fileLine);
-//            continue;
-//        }
-//
-//        printf("%s\n", fileLine);
-//        lineParsing(fileLine, configStruct);
-////        printf("%ld\n", lineLength);
-//
-//
-//        n = 0;
-//        free(fileLine);
-//        errno = 0;
-//    }
-//
-//    if(fileLine)
-//        free(fileLine);
-//
-//    puts("====STAMPA====");
-//    printConfig(*configStruct);
-//
-//    freeConfigFile(configStruct);
-//
-//    SYSCALL_NOTZERO(fclose(configFile), "creatFileAndCopy: fclose() - termino processo")
-//
-//
-//    return 0;
-//}
-
 //ritorna NULL in caso di errore, altrimenti la struttura che contiene i dati sulla configurazione del server
-//stringFile è il file dove vi è la configurazione
+//stringFile: pathname del file da leggere
 ConfigFile_t *configServer(char stringFile[])
 {
     ConfigFile_t *configStruct = malloc(sizeof(ConfigFile_t));
@@ -96,6 +39,7 @@ ConfigFile_t *configServer(char stringFile[])
             return configStruct;
         }
 
+        //La riga contiene sicurem
         if(isalpha(fileLine[0]) == 0)
         {
             errno = 0;

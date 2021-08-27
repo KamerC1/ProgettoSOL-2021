@@ -584,18 +584,22 @@ long writeFileServer(const char *pathname, const char *dirname, ServerStorage *s
     File *serverFile = icl_hash_find(hashPtrF, (void *) pathname);
     CSA(serverFile == NULL, "writeFileServer: il file non è presente nella hash table", ENOENT, ESOP("writeFile", 0); WAKES_UP_REMOVE; UNLOCK(&(storage->globalMutex)))
 
-    //Non possiamo usare START_WRITE perché, se un file viene rimosso dalla cache, vogliamo che ci sia la mutua esclusione su tutto lo storage
+    //Anche se abbiamo la lock sull'intero storage, writeFile potrebbe venire invocata mentre un'altra funzione dell'API è in esecuzione
+    //(ad esempio, tra START_WRITE_LOCK e END_WRITE_LOCK di closeFileServer)
+    LOCK(&(serverFile->fileLock.mutexFile))
+    rwLock_startWriting(&serverFile->fileLock);
+    UNLOCK(&(serverFile->fileLock.mutexFile))
 
-    IS_FILE_LOCKED(END_WRITE_LOCK)
+    IS_FILE_LOCKED(END_WRITE_LOCK; UNLOCK(&(storage->globalMutex)))
 
     CSA(findSortedList(serverFile->fdOpen_SLPtr, clientFd) == -1,
-        "writeFileServer: il file non è stato aperto da clientFd", EPERM, ESOP("writeFile", 0); WAKES_UP_REMOVE; UNLOCK(&(storage->globalMutex)))
+        "writeFileServer: il file non è stato aperto da clientFd", EPERM, ESOP("writeFile", 0); WAKES_UP_REMOVE; END_WRITE_LOCK; UNLOCK(&(storage->globalMutex)))
     //l'ultima operazione non era una open || il file non è vuoto
     CSA(serverFile->canWriteFile == 0 || serverFile->sizeFileByte != 0,
-        "l'ultima operazione non era una open || il file non è vuoto", EPERM, ESOP("writeFile", 0); WAKES_UP_REMOVE; UNLOCK(&(storage->globalMutex)))
+        "l'ultima operazione non era una open || il file non è vuoto", EPERM, ESOP("writeFile", 0); WAKES_UP_REMOVE; END_WRITE_LOCK; UNLOCK(&(storage->globalMutex)))
 
     //ripristino "sizeFileByte" in caso di errore perché fillStructFile() non lo fa.
-    CSA(fillStructFile(serverFile, storage, dirname) == -1, "", errno, serverFile->sizeFileByte = 0; ESOP("writeFile", 0); WAKES_UP_REMOVE; UNLOCK(&(storage->globalMutex)))
+    CSA(fillStructFile(serverFile, storage, dirname) == -1, "", errno, serverFile->sizeFileByte = 0; ESOP("writeFile", 0); WAKES_UP_REMOVE; END_WRITE_LOCK; UNLOCK(&(storage->globalMutex)))
     serverFile->canWriteFile = 0;
 
     DIE(fprintf(storage->logFile, "Numero byte scritti: %ld\n", serverFile->sizeFileByte))
@@ -604,6 +608,7 @@ long writeFileServer(const char *pathname, const char *dirname, ServerStorage *s
     long returnValue = serverFile->sizeFileByte; //garantisce la mutua esclusione
 
     WAKES_UP_REMOVE
+    END_WRITE_LOCK
     UNLOCK(&(storage->globalMutex))
 
     return returnValue;
@@ -725,9 +730,15 @@ int appendToFileServer(const char *pathname, char *buf, size_t size, const char 
     File *serverFile = icl_hash_find(hashPtrF, (void *) pathname);
     CSA(serverFile == NULL, "il file non è presente nella hash table", ENOENT, ESOP("appendToFile", 0); WAKES_UP_REMOVE; UNLOCK(&(storage->globalMutex)))
 
-    IS_FILE_LOCKED(END_WRITE_LOCK)
+    //Anche se abbiamo la lock sull'intero storage, appendToFileServer potrebbe venire invocata mentre un'altra funzione dell'API è in esecuzione
+    //(ad esempio, tra START_WRITE_LOCK e END_WRITE_LOCK di closeFileServer)
+    LOCK(&(serverFile->fileLock.mutexFile))
+    rwLock_startWriting(&serverFile->fileLock);
+    UNLOCK(&(serverFile->fileLock.mutexFile))
 
-    CSA(findSortedList(serverFile->fdOpen_SLPtr, clientFd) == -1, "File non aperto da clientFd", EPERM, ESOP("appendToFile", 0); WAKES_UP_REMOVE; UNLOCK(&(storage->globalMutex)))
+    IS_FILE_LOCKED(END_WRITE_LOCK; UNLOCK(&(storage->globalMutex)))
+
+    CSA(findSortedList(serverFile->fdOpen_SLPtr, clientFd) == -1, "File non aperto da clientFd", EPERM, ESOP("appendToFile", 0); WAKES_UP_REMOVE; END_WRITE_LOCK; UNLOCK(&(storage->globalMutex)))
 
     //lista che memorizza i file da copiare in dirname
     NodoQi_file *testaFilePtr = NULL;
@@ -753,7 +764,7 @@ int appendToFileServer(const char *pathname, char *buf, size_t size, const char 
         storage->maxByteStored -= serverFile->sizeFileByte;
         serverFile->sizeFileByte = serverFile->sizeFileByte + size - 1;
 
-        CSA(storage->maxStorageBytes < serverFile->sizeFileByte, "appendToFileServer: spazio non sufficiente", ENOMEM, ESOP("appendToFile", 0); WAKES_UP_REMOVE; UNLOCK(&(storage->globalMutex)))
+        CSA(storage->maxStorageBytes < serverFile->sizeFileByte, "appendToFileServer: spazio non sufficiente", ENOMEM, ESOP("appendToFile", 0); WAKES_UP_REMOVE; END_WRITE_LOCK; UNLOCK(&(storage->globalMutex)))
 
         addBytes2Storage(serverFile, storage, &testaFilePtr, &codaFilePtr);
         DIE(fprintf(storage->logFile, "Numero byte scritti: %ld\n", size - 1))
@@ -771,7 +782,7 @@ int appendToFileServer(const char *pathname, char *buf, size_t size, const char 
         writePathToFile(testaFilePtr, storage->logFile);
 
         if (dirname != NULL) {
-            CSA(copyFile2Dir(&testaFilePtr, &codaFilePtr, dirname) == -1, "appendToFileServer: copyFile2Dir", errno, ESOP("appendToFile", 0); WAKES_UP_REMOVE; UNLOCK(&(storage->globalMutex)))
+            CSA(copyFile2Dir(&testaFilePtr, &codaFilePtr, dirname) == -1, "appendToFileServer: copyFile2Dir", errno, ESOP("appendToFile", 0); WAKES_UP_REMOVE; END_WRITE_LOCK; UNLOCK(&(storage->globalMutex)))
         } else {
             freeQueueFile(&testaFilePtr, &codaFilePtr);
         }
@@ -782,6 +793,7 @@ int appendToFileServer(const char *pathname, char *buf, size_t size, const char 
     ESOP("AppendoToFile", 1)
 
     WAKES_UP_REMOVE
+    END_WRITE_LOCK;
     UNLOCK(&(storage->globalMutex))
 
     return 0;

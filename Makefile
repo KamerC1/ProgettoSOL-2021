@@ -91,5 +91,6 @@ cleanScript:
 	rm -f test/test1/cacheDestination/* test/test1/readDestination/* test/test1/log/*
 	rm -f test/test2/cacheDestination/* test/test2/readDestination/* test/test2/log/*
 	rm -f test/test3/cacheDestination/* test/test3/readDestination/* test/test3/log/*
+	rm -f test/testCache_concorrenza/cacheDestination/* test/testCache_concorrenza/readDestination/* test/testCache_concorrenza/log/*
 
 cleanAll: clean cleanScript

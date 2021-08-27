@@ -24,6 +24,7 @@ char *getRealPath(const char pathname[])
 }
 
 //Controlla se pathname è corretto
+//ritorna 0 in caso di successo, -1 altrimenti
 int checkPathname(const char *pathname)
 {
     if(pathname == NULL)

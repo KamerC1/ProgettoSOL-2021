@@ -38,7 +38,7 @@
 #define WRITEN(fd, buf, size, text) if(writen(fd, buf, size)==-1) { PRINT(text); return -1;}
 //#define READN(fd, buf, size, text) if(readn(fd, buf, size)==-1) { PRINT(text); return -1;}
 
-//restituisce -1 se rean restituisce 0 o -1
+//restituisce -1 se readn restituisce 0 o -1
 //Le parentesi "{}" servono per distruggere le variabili locali
 #define READN(fd, buf, size, text)                      \
 {                                                       \
