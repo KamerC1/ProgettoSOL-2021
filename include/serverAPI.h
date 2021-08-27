@@ -44,8 +44,7 @@ struct serverStorage
 
     bool isRemovingFile; //è true se si sta attualemente elimindo il file
     bool isHandlingAPI; //è true se si sta gestendo una funzione della API
-    pthread_mutex_t mutexRemoveFile;  //g
-    pthread_cond_t condRemoveFile;    //cond
+    pthread_cond_t condRemoveFile; //Da usare quando per la removeFile
 
     icl_hash_t *fileSystem; //tabella hash che memorizza l'insieme dei file
 

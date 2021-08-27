@@ -35,7 +35,6 @@ ServerStorage *createStorage(size_t maxStorageBytesF, size_t maxStorageFilesF, s
 
     SYSCALL_NOTZERO(pthread_mutex_init(&(storage->globalMutex), NULL), "createStorage: pthread_mutex_init")
 
-    SYSCALL_NOTZERO(pthread_mutex_init(&(storage->mutexRemoveFile), NULL), "createStorage: pthread_mutex_init")
     SYSCALL_NOTZERO(pthread_cond_init(&(storage->condRemoveFile), NULL), "rwLock_init: pthread_cond_init")
     storage->isRemovingFile = false;
     storage->isHandlingAPI = false;
@@ -134,7 +133,7 @@ void FIFO_ReplacementAlg(ServerStorage *storage, NodoQiPtr_File *testaPtrF, Nodo
 }
 
 //Copia il file espulso in dirname
-//Ritorna 0 in caso di successo, .1 altrimenti
+//Ritorna 0 in caso di successo, -1 altrimenti
 int copyFile2Dir(NodoQiPtr_File *testaPtrF, NodoQiPtr_File *codaPtrF, const char *dirname)
 {
     //==Calcola il path dove lavora il processo==

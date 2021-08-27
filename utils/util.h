@@ -37,9 +37,6 @@
 
 
 
-
-
-
 #define LOCK(l)                                         \
 if (pthread_mutex_lock(l) != 0)                         \
 {	                                                    \
