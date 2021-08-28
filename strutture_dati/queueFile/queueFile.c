@@ -6,34 +6,6 @@
 #include "queueFile.h"
 #include "../sortedList/sortedList.h"
 
-//int main()
-//{
-//    return 0;
-//}
-
-//int main()
-//{
-//    NodoQi_file *testaPtrF = NULL;
-//    NodoQi_file *codaPtrF = NULL;
-//
-//    pushFile(&testaPtrF, &codaPtrF, "CANE", "GATTO");
-//    pushFile(&testaPtrF, &codaPtrF, "CANE2", "GATTO2");
-//
-//    stampaQueueFile(testaPtrF);
-//
-//    char *string = NULL;
-//    char *fileName = NULL;
-//
-//    popString(&testaPtrF, &codaPtrF, &string, &fileName);
-//    printf("Stringa: %s\nFilename: %s\n", string, fileName);
-//
-//    free(string);
-//    free(fileName);
-//
-//    freeQueueFile(&testaPtrF, &codaPtrF);
-//    return 0;
-//}
-
 
 void pushFile(NodoQiPtr_File *testaPtrF, NodoQiPtr_File *codaPtrF, File *fileF)
 {
@@ -82,18 +54,6 @@ File *popFile(NodoQiPtr_File *lPtrF, NodoQiPtr_File *codaPtr)
         return NULL;
     }
 }
-
-//void stampaQueueFile(NodoQiPtr_File lPtrF)
-//{
-//    if(lPtrF != NULL)
-//    {
-//        printf("%s | %s -> ", lPtrF->stringa, lPtrF->filename);
-//
-//        stampaQueueFile(lPtrF->prossimoPtr);
-//    }
-//    else
-//        puts("NULL");
-//}
 
 size_t numberOfElements(NodoQiPtr_File lPtrF)
 {

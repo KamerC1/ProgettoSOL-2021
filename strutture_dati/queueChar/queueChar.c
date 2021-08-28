@@ -4,38 +4,6 @@
 #include "../../utils/util.h"
 #include "queueChar.h"
 
-//int main()
-//{
-//    NodoQiPtr_string testa = NULL;
-//    NodoQiPtr_string coda = NULL;
-//
-//    pushStringa(&testa, &coda, "1");
-//    pushStringa(&testa, &coda, "2");
-//    pushStringa(&testa, &coda, "3");
-//    pushStringa(&testa, &coda, "4");
-//    pushStringa(&testa, &coda, "5");
-//    pushStringa(&testa, &coda, "6");
-//
-//    stampaQueueStringa(testa);
-//
-//    swapFirstWithSecond(&testa, &coda);
-//
-//
-//    stampaQueueStringa(testa);
-//
-//    free(popString(&testa, &coda));
-//
-//    stampaQueueStringa(testa);
-//
-//    swapFirstWithSecond(&testa, &coda);
-//
-//    stampaQueueStringa(testa);
-//
-//    freeQueueStringa(&testa, &coda);
-//
-//    return 0;
-//}
-
 void pushStringa(NodoQiPtr_string *testaPtrF, NodoQiPtr_string *codaPtrF, char dataF[])
 {
     NodoQiPtr_string nuovoPtr = malloc(sizeof(NodoQi_string));
@@ -84,12 +52,6 @@ char *popString(NodoQiPtr_string *lPtrF, NodoQiPtr_string *codaPtr)
 {
     if(*lPtrF != NULL)
     {
-//        int lenghtString = strlen((*lPtrF)->stringa);
-//        char *tempString = malloc(sizeof(char) * (lenghtString+1));
-//        NULL_SYSCALL(tempString, "pop: malloc")
-//        memset(tempString, '\0', lenghtString);
-//        strncpy(tempString, (*lPtrF)->stringa, lenghtString + 1);
-
         char *tempString = (*lPtrF)->stringa;
 
         NodoQiPtr_string tempPtr = *lPtrF;
@@ -107,35 +69,7 @@ char *popString(NodoQiPtr_string *lPtrF, NodoQiPtr_string *codaPtr)
         return NULL;
     }
 }
-//
-//int top(NodoQiPtr_string lPtrF)
-//{
-//    if(lPtrF != NULL)
-//    {
-//        return lPtrF->data;
-//    }
-//    else
-//    {
-//        puts("la lista è vuota");
-//        exit(EXIT_FAILURE);
-//    }
-//}
-//
-////ritorna 1 se trova data, 0 altrimenti
-//int findDataQueue(NodoQiPtr_string lPtr, int data)
-//{
-//    if(lPtr == NULL)
-//    {
-//        return 0;
-//    }
-//    if(lPtr->data == data)
-//    {
-//        return 1;
-//    }
-//    else
-//        findDataQueue(lPtr->prossimoPtr, data);
-//}
-//
+
 //elimina il "data" dalla coda- Ritorna 0 in caso di successo, -1 altrimenti
 int deleteDataQueueStringa(NodoQiPtr_string *lPtr, NodoQiPtr_string *codaPtr, char *data)
 {
@@ -177,7 +111,6 @@ int deleteDataQueueStringa(NodoQiPtr_string *lPtr, NodoQiPtr_string *codaPtr, ch
                 //Data è posizionato alla fine della coda
                 if(*codaPtr == tempPtr)
                 {
-                    //Data è posizionato alla fine della coda
                     *codaPtr = precedentePtr;
                 }
 
@@ -228,9 +161,6 @@ int swapFirstWithSecond(NodoQiPtr_string *lPtrF, NodoQiPtr_string *codaPtr)
         return -1;
     if((*lPtrF)->prossimoPtr == NULL)
         return -1;
-
-//    char *first = (*lPtrF)->stringa;
-//    char *second = (*lPtrF)->prossimoPtr->stringa;
 
     char *temp = (*lPtrF)->stringa;
     (*lPtrF)->stringa = (*lPtrF)->prossimoPtr->stringa;

@@ -92,7 +92,6 @@ int main(int argc, char *argv[])
     unlink(sockName);
     atexit(cleanup);
 
-    //mettere sotto un commento queste istruzioni: [controllare]
     puts("--------Stampa config------------");
     printConfig(*configFile);
     puts("--------fine config------------");
@@ -157,7 +156,6 @@ void gestioneSegnali()
 //    SYSCALL(sigaddset(&mask, SIGTSTP), "Errore: sigaddset(&mask, SIGTERM)")
     SYSCALL(sigaddset(&mask, SIGQUIT), "Errore: sigaddset(&mask, SIGQUIT)")
     SYSCALL(sigaddset(&mask, SIGHUP), "Errore: sigaddset(&mask, SIGHUP)")
-    //guardare su notion per capire cosa amettere come primo argomento [eliminare]
     SYSCALL_NOTZERO(pthread_sigmask(SIG_BLOCK, &mask, &oldmask), "Errore: Spthread_sigmask(SIG_BLOCK, &mask, &oldmask)")
 
 

@@ -40,7 +40,15 @@ do
 $clientDir -p -f cs_sock -W $fileDir/test$i.txt -D $cacheDestination &
 done
 
-for((i=0;i<n;++i)); do
+m=n
+#rimuovo i file
+for((i = 1; i <= n; i++))
+do
+$clientDir -p -f cs_sock -c $fileDir/test$i.txt &
+(( m++ ))
+done
+
+for((i=0;i<m;++i)); do
     wait ${PID[i]}
 done
 

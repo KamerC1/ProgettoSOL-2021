@@ -205,16 +205,19 @@ void MRU_ReplacementAlg(ServerStorage *storage, NodoQiPtr_File *testaPtrF, NodoQ
     File *file2Remove = NULL;
     icl_hash_foreach(storage->fileSystem, k, entry, key, newFile)
     {
-        //primo elemento incontrato
-        if(file2Remove == NULL)
+
+        //L'elemento da eliminare non deve essere il chiamante
+        if(newFile != callerFile)
         {
-            //L'elemento da eliminare non deve essere il chiamante
-            if(newFile != callerFile)
+            //primo elemento incontrato
+            if(file2Remove == NULL)
+            {
                 file2Remove = newFile;
-        }
-        else
-        {
-            file2Remove = maxTime(file2Remove, newFile);
+            }
+            else
+            {
+                file2Remove = maxTime(file2Remove, newFile);
+            }
         }
     }
 
@@ -328,13 +331,12 @@ static File *maxTime(File *firstFile, File *secondFile)
 int copyFile2Dir(NodoQiPtr_File *testaPtrF, NodoQiPtr_File *codaPtrF, const char *dirname)
 {
     //==Calcola il path dove lavora il processo==
-    //calcolo la lunghezza del path [eliminare]
     char *processPath = getcwd(NULL, PATH_MAX);
     CS(processPath == NULL, "copyFile2Dir: getcwd", errno)
     int pathLength = strlen(processPath); //il +1 è già compreso in MAX_PATH_LENGTH
     REALLOC(processPath, pathLength + 1) //getcwd alloca "MAX_PATH_LENGTH" bytes
 
-    //cambio path [eliminare]
+    //cambio path
     DIR *directory = opendir(dirname);
     CSA(directory == NULL, "directory = opendir(dirname): ", errno, free(processPath))
     //la mutua  esclusione è già stata acquisita in writeFileServer o appendToFileServer

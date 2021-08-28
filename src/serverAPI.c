@@ -478,7 +478,6 @@ int readNFilesServer(int N, const char *dirname, ServerStorage *storage, int cli
         N = hashPtrF->nentries;
 
     //==Calcola il path dove lavora il processo==
-    //calcolo la lunghezza del path [eliminare]
     char *processPath = getcwd(NULL, PATH_MAX);
     CSA(processPath == NULL, "readNFiles: getcwd", errno, ESOP("readNFiles", 0); WAKES_UP_REMOVE; UNLOCK(&(storage->globalMutex)))
     size_t pathLength = strlen(processPath); //il +1 è già compreso in MAX_PATH_LENGTH
@@ -687,7 +686,7 @@ static int fillStructFile(File *serverFileF, ServerStorage *storage, const char 
     //-Inserimento fileContent-
     RETURN_NULL_SYSCALL(serverFileF->fileContent, malloc(sizeof(char) * serverFileF->sizeFileByte), "fillStructFile: malloc()")
     memset(serverFileF->fileContent, '\0', serverFileF->sizeFileByte);
-    size_t readLength = fread(serverFileF->fileContent, 1, serverFileF->sizeFileByte - 1, diskFile); //size: 1 perché si legge 1 byte alla volta [eliminare]
+    size_t readLength = fread(serverFileF->fileContent, 1, serverFileF->sizeFileByte - 1, diskFile);
     //Controllo errore fread
     CS(readLength != numCharFile || ferror(diskFile), "fillStructFile: fread", errno)
 
@@ -1291,7 +1290,7 @@ void freeFileData(void *serverFile)
 void freeStorage(ServerStorage *storage)
 {
     freeQueueStringa(&(storage->FIFOtestaPtr), &(storage->FIFOcodaPtr));
-    icl_hash_destroy(storage->fileSystem, free, freeFileData); //da mettere controllo errore [controllare]
+    SYSCALL(icl_hash_destroy(storage->fileSystem, free, freeFileData), "freeStorage: icl_hash_destroy")
 
     free(storage);
 }

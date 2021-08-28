@@ -29,6 +29,7 @@ int openConnection(const char *sockname, int msec, const struct timespec abstime
     sckAddr.sun_family = AF_UNIX;
 
 
+    //Provo a connettermi finché non termina il tempo
     while(connect(FD_SOCK, (struct sockaddr *) &sckAddr, sizeof(sckAddr)) == -1)
     {
         CSA(errno != ENOENT, "openConnection: connect()", errno, ES_NEG)
@@ -44,6 +45,7 @@ int openConnection(const char *sockname, int msec, const struct timespec abstime
     }
     strncpy(SOCKNAME, sockname, MAX_BYTES_SOCKNAME);
 
+    //Controllo se il server ha accettato la connessione
     int esitoConnessione;
     READN(FD_SOCK, &esitoConnessione, sizeof(int), "Errore: readn()")
 

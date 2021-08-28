@@ -161,6 +161,7 @@ int cmlParsing(NodoCLPtr *testaPtr, NodoCLPtr *codaPtr, int argc, char *argv[], 
     return 0;
 }
 
+//Inserisce l'opt e arg in testa alla coda
 void pushCoda(NodoCLPtr *testaPtrF, NodoCLPtr *codaPtrF, char optionF, char argumentF[])
 {
     NodoCLPtr nuovoPtr = NULL;
@@ -194,6 +195,7 @@ void pushCoda(NodoCLPtr *testaPtrF, NodoCLPtr *codaPtrF, char optionF, char argu
     }
 }
 
+//Fa la pop della coda e memorizza opt e arg in *optionF e *argumentF
 //argumentF deve essere NULL, altrimenti restituisce -1, errno = EPERM
 int popCoda(NodoCLPtr *lPtrF, NodoCLPtr *codaPtrF, char *optionF, char **argumentF)
 {

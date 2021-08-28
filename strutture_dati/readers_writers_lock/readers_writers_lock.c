@@ -4,6 +4,7 @@
 #include "../../utils/util.h"
 #include "readers_writers_lock.h"
 
+//Inizializza struttura dati
 void rwLock_init(RwLock_t *rwLockF)
 {
     SYSCALL_NOTZERO(pthread_mutex_init(&(rwLockF->mutexFile), NULL), "rwLock_init: pthread_mutex_init")
