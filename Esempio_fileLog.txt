@@ -1,0 +1,77 @@
+//Nota: i commenti con "//" non sono presenti nel file di log vero e proprio
+
+//Arrivo nuova connessione
+Nuova connessione: 7	Data: 30-08-2021 14:10:42
+
+//Richiesta openFile senza errore
+Thread Worker: 140516878583552 	Client fd: 7 	Data: 30-08-2021 14:10:42
+Operazione: openFile [flags: 101]
+Pathname: /mnt/c/Users/39334/Documents/bash/progettoSOL-main/test/test3/file/CiambellaCopy/Ciambella1.txt
+Tipo operazione: O_CREATE
+Esito OpenFile: POSITIVO
+
+//Richiesta openFile con errore
+Thread Worker: 140514092123904 	Client fd: 7 	Data: 30-08-2021 14:14:19
+Operazione: openFile [flags: 10]
+Pathname: /mnt/c/Users/39334/Documents/bash/progettoSOL-main/test/test2/file/600kb_Files/FormaggioCopy/Formaggio17.txt
+Esito OpenFile: NEGATIVO
+
+//Richiesta writeFile con espulsione
+Thread Worker: 140514092123904 	Client fd: 7 	Data: 30-08-2021 14:14:18
+Operazione: writeFile [dirname: test/test2/cacheDestination]
+Pathname: /mnt/c/Users/39334/Documents/bash/progettoSOL-main/test/test2/file/600kb_Files/FormaggioCopy/Formaggio2.txt
+1 file espulsi: 
+/mnt/c/Users/39334/Documents/bash/progettoSOL-main/test/test2/file/600kb_Files/FormaggioCopy/Formaggio1.txt
+Numero byte scritti: 624540
+Esito writeFile: POSITIVO
+
+//Richiesta writeFile senza espulsione
+Thread Worker: 140514092123904 	Client fd: 7 	Data: 30-08-2021 14:14:18
+Operazione: writeFile [dirname: test/test2/cacheDestination]
+Pathname: /mnt/c/Users/39334/Documents/bash/progettoSOL-main/test/test2/file/600kb_Files/FormaggioCopy/Formaggio2.txt
+Numero byte scritti: 624540
+Esito writeFile: POSITIVO
+
+//Richiesta closeConnection
+Thread Worker: 140516827858688 	Client fd: 7 	Data: 30-08-2021 14:10:42
+Operazione: closeConnection
+Esito removeClientInfo: POSITIVO
+
+//Richiesta copyFileToDirServer 
+Thread Worker: 140516819404544 	Client fd: 7 	Data: 30-08-2021 14:10:42
+Operazione: copyFileToDirServer [dirname: test/test3/readDestination/]
+Pathname: /mnt/c/Users/39334/Documents/bash/progettoSOL-main/test/test3/file/CiambellaCopy/Ciambella1.txt
+Numero byte letti: 408 
+Esito copyFileToDirServer: POSITIVO
+
+//Richiesta appendToFile 
+Thread Worker: 90638080 	Client fd: 7 	Data: 30-08-2021 14:25:42
+Operazione: appendToFile [dirname: NULL]
+Pathname: /mnt/c/Users/39334/Documents/bash/progettoSOL-main/test/test1/file/directory/pane.txt
+Numero byte scritti: 11
+Esito AppendoToFile: POSITIVO
+
+//Richiesta lockFileServer
+Thread Worker: 90638080 	Client fd: 8 	Data: 30-08-2021 14:25:45
+Operazione: lockFileServer
+Pathname: /mnt/c/Users/39334/Documents/bash/progettoSOL-main/test/test1/file/directory/pane.txt
+Esito unlockFileServer: POSITIVO
+
+//Richiesta unlockFileServer
+Thread Worker: 90638080 	Client fd: 8 	Data: 30-08-2021 14:25:45
+Operazione: unlockFileServer
+Pathname: /mnt/c/Users/39334/Documents/bash/progettoSOL-main/test/test1/file/directory/pane.txt
+Esito unlockFileServer: POSITIVO
+
+//Richiesta readNFiles
+Thread Worker: 90638080 	Client fd: 7 	Data: 30-08-2021 14:25:43
+Operazione: readNFiles [N: 0]
+dirname: test/test1/readDestination/
+File salvati: 
+[Numero byte letti: 277]	File: /mnt/c/Users/39334/Documents/bash/progettoSOL-main/test/test1/file/directory/paprica.txt
+[Numero byte letti: 1055]	File: /mnt/c/Users/39334/Documents/bash/progettoSOL-main/test/test1/file/directory/pane.txt
+[Numero byte letti: 1045]	File: /mnt/c/Users/39334/Documents/bash/progettoSOL-main/test/test1/file/spaghetti.txt
+[Numero byte letti: 317]	File: /mnt/c/Users/39334/Documents/bash/progettoSOL-main/test/test1/file/carne.txt
+[Numero byte letti: 2302]	File: /mnt/c/Users/39334/Documents/bash/progettoSOL-main/test/test1/file/directory/subdirectory/pizza.txt
+Numero file letti da readN: 5
+Esito readNFiles: POSITIVO

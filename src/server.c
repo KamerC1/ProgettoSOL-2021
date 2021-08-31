@@ -710,7 +710,7 @@ int gestioneApi_appendToFile(int fdAcceptF)
     return 0;
 }
 
-//Gestisce la richiesta dell'API "lockFIle" e chiama lockFIleServer
+//Gestisce la richiesta dell'API "lockFIle" e chiama lockFileServer
 int gestioneApi_lockFile(int fdAcceptF)
 {
     //leggo la dimensione del pathname

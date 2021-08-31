@@ -17,7 +17,7 @@
 #define THREAD_CREATE(a, b, c, d, text) if(pthread_create(a, b, c, d) != 0) { perror(text);exit(EXIT_FAILURE);}
 #define THREAD_JOIN(a, b, text) if(pthread_join(a, b) != 0) { perror(text);exit(EXIT_FAILURE);}
 
-#define STAMPA_ERRORE 1 
+#define STAMPA_ERRORE 0 
 #define PRINT(text) if(STAMPA_ERRORE) {puts(text);}
 
 #define CS(cond, text, err) if(cond) {PRINT(text);errno=err; return -1;} //CS = COND_SETERR

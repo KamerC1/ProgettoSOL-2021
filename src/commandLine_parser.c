@@ -103,7 +103,7 @@ int cmlParsing(NodoCLPtr *testaPtr, NodoCLPtr *codaPtr, int argc, char *argv[], 
                         *time = 0;
                     isPresent_t = true;
                 }
-                else PRINT("-p già presente - ignorato")
+                else PRINT("-t già presente - ignorato")
                 break;
             case 'l':
                 need_f = true;
